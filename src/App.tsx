@@ -17,13 +17,21 @@ import {
 } from './store'
 import './App.css'
 
-type PageKey = 'dashboard' | 'my-health' | 'family-members' | 'member-profile' | 'emergency-center' | 'live-monitoring' | 'medical-information' | 'locations' | 'emergency-history' | 'wearable-device' | 'notifications' | 'privacy-permissions' | 'family-settings' | 'emergency-contacts' | 'account-settings'
+type PageKey = 'dashboard' | 'my-health' | 'family-members' | 'join-family' | 'member-profile' | 'emergency-center' | 'live-monitoring' | 'medical-information' | 'locations' | 'emergency-history' | 'wearable-device' | 'notifications' | 'privacy-permissions' | 'family-settings' | 'emergency-contacts' | 'account-settings'
 type GeoPoint = { latitude: number; longitude: number; accuracy: number; timestamp: number }
 type BatteryManagerLike = EventTarget & { level: number }
 type InviteDraft = { code: string; passcode: string; expiresAt: number } | null
 type ProfileField = { key: keyof Account['profile']; label: string; type?: string; options?: string[]; access?: 'basic' | 'medical' | 'emergency' }
 
 function timestampNow() { return Date.now() }
+const INVITE_LIFETIME_MS = 15 * 60 * 1000
+
+function isInviteActive(invite: CircleInvite, now = timestampNow()) {
+  return typeof invite.createdAt === 'number'
+    && invite.createdAt <= now
+    && invite.expiresAt > now
+    && invite.expiresAt <= invite.createdAt + INVITE_LIFETIME_MS
+}
 const SESSION_ACTIVITY_KEY = 'familypulse-session-last-active'
 const SESSION_IDLE_LIMIT = 15 * 60 * 1000
 
@@ -42,6 +50,7 @@ const navigation: { label: string; key: PageKey; icon: typeof Home; group: strin
   { label: 'Overview', key: 'dashboard', icon: Home, group: 'YOUR SPACE' },
   { label: 'My health', key: 'my-health', icon: HeartPulse, group: 'YOUR SPACE' },
   { label: 'Family members', key: 'family-members', icon: UsersRound, group: 'FAMILY CIRCLE' },
+  { label: 'Join a family', key: 'join-family', icon: KeyRound, group: 'FAMILY CIRCLE' },
   { label: 'Medical information', key: 'medical-information', icon: ShieldPlus, group: 'FAMILY CIRCLE' },
   { label: 'Emergency contacts', key: 'emergency-contacts', icon: UserRound, group: 'FAMILY CIRCLE' },
   { label: 'Emergency center', key: 'emergency-center', icon: AlertCircle, group: 'SAFETY' },
@@ -58,6 +67,7 @@ const pageDetails: Record<PageKey, { title: string; eyebrow: string; description
   dashboard: { title: 'Your family, at a glance.', eyebrow: 'FAMILY PULSE', description: 'A quieter way to look out for the people who matter.' },
   'my-health': { title: 'My health', eyebrow: 'YOUR SPACE', description: 'Your personal health information, in one private place.' },
   'family-members': { title: 'Family members', eyebrow: 'FAMILY CIRCLE', description: 'Invite people into your circle and choose what you share.' },
+  'join-family': { title: 'Join a family', eyebrow: 'FAMILY CIRCLE', description: 'Join another family circle with its invite code and passcode.' },
   'member-profile': { title: 'Member profile', eyebrow: 'FAMILY CIRCLE', description: 'Health information shared with your circle.' },
   'emergency-center': { title: 'Emergency center', eyebrow: 'SAFETY', description: 'Set response preferences and manage manual safety check-ins.' },
   'live-monitoring': { title: 'Live monitoring', eyebrow: 'SAFETY', description: 'Connect a supported wearable to bring live health readings into your care view.' },
@@ -79,6 +89,7 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [page, setPage] = useState<PageKey>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [circleSwitcherOpen, setCircleSwitcherOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [inviteDraft, setInviteDraft] = useState<InviteDraft>(null)
   const [inviteModal, setInviteModal] = useState<'create' | 'join' | null>(null)
@@ -104,6 +115,7 @@ function App() {
 
   const account = store.accounts.find((item) => item.id === accountId) ?? null
   const circle = account ? store.circles.find((item) => item.id === account.circleId) ?? null : null
+  const joinedCircles = useMemo(() => account ? store.circles.filter((item) => item.memberIds.includes(account.id)) : [], [account, store.circles])
   const circleAccounts = useMemo(() => circle ? store.accounts.filter((item) => circle.memberIds.includes(item.id)) : [], [circle, store.accounts])
   const current = pageDetails[page]
   const selectedMember = selectedMemberId ? circleAccounts.find((item) => item.id === selectedMemberId) ?? null : null
@@ -234,6 +246,12 @@ function App() {
   function updateStore(mutator: (current: LocalStore) => LocalStore) {
     setStore((currentStore) => mutator(currentStore))
   }
+  function switchCircle(circleId: string) {
+    if (!account || !joinedCircles.some((item) => item.id === circleId)) return
+    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, circleId } : item) }))
+    setCircleSwitcherOpen(false)
+    setPage('dashboard')
+  }
   function notify(message: string) {
     setToast(message)
     window.setTimeout(() => setToast(''), 3200)
@@ -322,7 +340,7 @@ function App() {
       const code = String(form.get('inviteCode') ?? '').trim().toUpperCase()
       const passcode = String(form.get('invitePasscode') ?? '').trim()
       const token = await hashInviteCredentials(code, passcode)
-      const invite = store.invites.find((item) => item.expiresAt > timestampNow() && (item.token ? item.token === token : item.code === code && item.passcode === passcode))
+      const invite = store.invites.find((item) => isInviteActive(item) && (item.token ? item.token === token : item.code === code && item.passcode === passcode))
       if (!invite) { setAuthError('That invite code and passcode are invalid or expired.'); return }
       const name = String(form.get('name') ?? '').trim()
       if (!name || name.length > 80) { setAuthError('Enter a name of 1 to 80 characters.'); return }
@@ -353,10 +371,47 @@ function App() {
     const code = makeInviteCode()
     const passcode = makeInvitePasscode()
     const token = await hashInviteCredentials(code, passcode)
-    const invite: CircleInvite = { token, circleId: circle.id, createdBy: account.id, expiresAt: timestampNow() + 24 * 60 * 60 * 1000 }
+    const createdAt = timestampNow()
+    const invite: CircleInvite = { token, createdAt, circleId: circle.id, createdBy: account.id, expiresAt: createdAt + INVITE_LIFETIME_MS }
     updateStore((currentStore) => ({ ...currentStore, invites: [...currentStore.invites, invite] }))
     setInviteDraft({ code, passcode, expiresAt: invite.expiresAt })
     setInviteModal('create')
+  }
+  async function joinExistingCircle(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!account) return
+    const form = new FormData(event.currentTarget)
+    const code = String(form.get('inviteCode') ?? '').trim().toUpperCase()
+    const passcode = String(form.get('invitePasscode') ?? '').trim()
+    const password = String(form.get('password') ?? '')
+    const passwordIterations = account.passwordIterations ?? 120_000
+    if (account.passwordHash !== await hashPassword(password, account.passwordSalt, passwordIterations)) {
+      notify('That password does not match your account.')
+      return
+    }
+    const token = await hashInviteCredentials(code, passcode)
+    const invite = store.invites.find((item) => isInviteActive(item) && (item.token ? item.token === token : item.code === code && item.passcode === passcode))
+    const targetCircle = invite ? store.circles.find((item) => item.id === invite.circleId) : null
+    if (!invite || !targetCircle) {
+      notify('That invite code and passcode are invalid or expired.')
+      return
+    }
+    if (targetCircle.memberIds.includes(account.id)) {
+      switchCircle(targetCircle.id)
+      notify(`You are already a member of ${targetCircle.name}.`)
+      return
+    }
+    const upgradedHash = passwordIterations < PASSWORD_HASH_ITERATIONS ? await hashPassword(password, account.passwordSalt) : account.passwordHash
+    updateStore((currentStore) => ({
+      ...currentStore,
+      accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, circleId: targetCircle.id, passwordHash: upgradedHash, passwordIterations: PASSWORD_HASH_ITERATIONS } : item),
+      circles: currentStore.circles.map((item) => item.id === targetCircle.id ? { ...item, memberIds: [...item.memberIds, account.id] } : item),
+      invites: currentStore.invites.filter((item) => item !== invite),
+    }))
+    setCircleSwitcherOpen(false)
+    setSelectedMemberId(null)
+    setPage('dashboard')
+    notify(`You joined ${targetCircle.name}.`)
   }
   function handleRemoveMember(memberId: string) {
     if (!circle || !account || circle.ownerId !== account.id || memberId === account.id) return
@@ -431,14 +486,14 @@ function App() {
   return <main className="app-shell">
     <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-brand"><span className="brand-mark"><HeartPulse size={18} /></span><span>family<span className="brand-pulse">pulse</span></span><button className="mobile-close icon-button" aria-label="Close menu" onClick={() => setMobileNavOpen(false)}><X size={18} /></button></div>
-      <button className="circle-switcher" onClick={() => setPage('family-settings')}><span className="circle-avatar"><UsersRound size={16} /></span><span className="circle-copy"><strong>{circle?.name ?? 'My Family Circle'}</strong><small>{circleAccounts.length} {circleAccounts.length === 1 ? 'member' : 'members'}</small></span><ChevronDown size={15} /></button>
-      <nav className="main-nav" aria-label="Main navigation">{['YOUR SPACE', 'FAMILY CIRCLE', 'SAFETY', 'SETTINGS'].map((group) => <div className="nav-group" key={group}><p className="nav-label">{group}</p>{navigation.filter((item) => item.group === group).map(({ label, key, icon: Icon }) => <button key={key} className={`nav-item ${page === key ? 'active' : ''}`} onClick={() => { setPage(key); setMobileNavOpen(false) }}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{key === 'notifications' && alerts.some((item) => !item.read) && <span className="nav-safe-dot" />}</button>)}</div>)}</nav>
+      <div className="circle-switcher-wrap"><button className="circle-switcher" aria-expanded={circleSwitcherOpen} onClick={() => joinedCircles.length > 1 ? setCircleSwitcherOpen((isOpen) => !isOpen) : setPage('family-settings')}><span className="circle-avatar"><UsersRound size={16} /></span><span className="circle-copy"><strong>{circle?.name ?? 'My Family Circle'}</strong><small>{circleAccounts.length} {circleAccounts.length === 1 ? 'member' : 'members'}</small></span><ChevronDown size={15} /></button>{circleSwitcherOpen && joinedCircles.length > 1 && <div className="circle-switcher-menu" role="group" aria-label="Switch family circle">{joinedCircles.map((joinedCircle) => <button key={joinedCircle.id} className={joinedCircle.id === circle?.id ? 'selected' : ''} onClick={() => switchCircle(joinedCircle.id)}><strong>{joinedCircle.name}</strong><small>{joinedCircle.memberIds.length} {joinedCircle.memberIds.length === 1 ? 'member' : 'members'}</small></button>)}</div>}</div>
+      <nav className="main-nav" aria-label="Main navigation">{['YOUR SPACE', 'FAMILY CIRCLE', 'SAFETY', 'SETTINGS'].map((group) => <div className="nav-group" key={group}><p className="nav-label">{group}</p>{navigation.filter((item) => item.group === group).map(({ label, key, icon: Icon }) => <button key={key} className={`nav-item ${page === key ? 'active' : ''}`} onClick={() => { setPage(key); setMobileNavOpen(false); setCircleSwitcherOpen(false) }}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{key === 'notifications' && alerts.some((item) => !item.read) && <span className="nav-safe-dot" />}</button>)}</div>)}</nav>
       <div className="sidebar-bottom"><div className="privacy-mini"><ShieldCheck size={17} /><div><strong>Your family circle</strong><span>Care, connected</span></div></div><button className="account-row" onClick={handleLogout}><span className="account-avatar">{account.name.slice(0, 1).toUpperCase()}</span><span className="account-copy"><strong>{account.name}</strong><small>Sign out</small></span><LogOut size={16} /></button></div>
     </aside>
     {mobileNavOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
     <section className="main-panel"><header className="topbar"><button className="icon-button nav-toggle" aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((isOpen) => !isOpen)}><Menu size={20} /></button><div className="breadcrumb"><span>{circle?.name}</span><span className="breadcrumb-divider">/</span><strong>{current.title}</strong></div><div className="top-actions"><div className="session-tag"><span className="neutral-dot" />LOCAL PROFILE</div><button className="icon-button top-search" aria-label="Search" onClick={() => notify('Search is not available yet.')}><Search size={18} /></button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => { setPage('notifications'); markNotificationsRead() }}><Bell size={18} />{alerts.some((item) => !item.read) && <span />}</button><button className="top-user" onClick={() => setPage('account-settings')} aria-label="Account settings"><span>{account.name.slice(0, 1).toUpperCase()}</span><ChevronDown size={14} /></button></div></header>
       <div className="content-wrap"><div className="page-heading"><div><div className="eyebrow">{current.eyebrow}</div><h1>{current.title}</h1><p>{current.description}</p></div>{page === 'dashboard' && <button className="outline-button" onClick={() => setPage('family-members')}><UsersRound size={16} />Manage circle</button>}</div>
-        {page === 'dashboard' ? <Dashboard members={circleAccounts} currentId={account.id} circle={circle} events={store.events.filter((item) => item.circleId === circle?.id && item.status === 'open')} geoPoints={geoPoints} geoAddresses={geoAddresses} batteryPercent={batteryPercent} activeMemberTimes={activeMemberTimes} onAdd={() => setInviteModal('create')} onNavigate={setPage} accountName={account.name} /> : <PageContent page={page} account={account} circle={circle} members={circleAccounts} selectedMember={selectedMember} invite={inviteDraft} events={store.events.filter((item) => item.circleId === circle?.id)} notifications={alerts} geoPoints={geoPoints} locationError={locationError} onAdd={() => setInviteModal('create')} onJoin={() => setInviteModal('join')} onSelectMember={(id) => { setSelectedMemberId(id); setPage('member-profile') }} onRemoveMember={handleRemoveMember} onSaveProfile={saveProfile} onOpenMedical={() => setPage('medical-information')} onPermissionChange={updatePermission} onSaveContact={() => setContactModal(true)} onRemoveContact={(contactId) => updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, contacts: item.contacts.filter((contact) => contact.id !== contactId) } : item) }))} onToggleLocation={toggleLocationSharing} onStartEvent={startManualSafetyEvent} onUpdateEvent={updateEvent} onUpdateEscalation={(minutes) => circle && updateStore((currentStore) => ({ ...currentStore, circles: currentStore.circles.map((item) => item.id === circle.id ? { ...item, escalationMinutes: minutes } : item) }))} onDeleteData={clearLocalData} onNotify={notify} />}
+        {page === 'dashboard' ? <Dashboard members={circleAccounts} currentId={account.id} circle={circle} events={store.events.filter((item) => item.circleId === circle?.id && item.status === 'open')} geoPoints={geoPoints} geoAddresses={geoAddresses} batteryPercent={batteryPercent} activeMemberTimes={activeMemberTimes} onAdd={() => setInviteModal('create')} onNavigate={setPage} accountName={account.name} /> : page === 'join-family' ? <JoinFamilyPage onSubmit={joinExistingCircle} /> : <PageContent page={page} account={account} circle={circle} members={circleAccounts} selectedMember={selectedMember} invite={inviteDraft} events={store.events.filter((item) => item.circleId === circle?.id)} notifications={alerts} geoPoints={geoPoints} locationError={locationError} onAdd={() => setInviteModal('create')} onJoin={() => setInviteModal('join')} onSelectMember={(id) => { setSelectedMemberId(id); setPage('member-profile') }} onRemoveMember={handleRemoveMember} onSaveProfile={saveProfile} onOpenMedical={() => setPage('medical-information')} onPermissionChange={updatePermission} onSaveContact={() => setContactModal(true)} onRemoveContact={(contactId) => updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, contacts: item.contacts.filter((contact) => contact.id !== contactId) } : item) }))} onToggleLocation={toggleLocationSharing} onStartEvent={startManualSafetyEvent} onUpdateEvent={updateEvent} onUpdateEscalation={(minutes) => circle && updateStore((currentStore) => ({ ...currentStore, circles: currentStore.circles.map((item) => item.id === circle.id ? { ...item, escalationMinutes: minutes } : item) }))} onDeleteData={clearLocalData} onNotify={notify} />}
         <div className="medical-disclaimer"><ShieldCheck size={16}/><span>Keep health details organized and coordinate manual family check-ins in one place. For urgent medical or safety concerns, contact local emergency services.</span></div>
       </div>
     </section>
@@ -486,6 +541,19 @@ function CircleLiveStatus({ members, currentId, geoPoints, geoAddresses, battery
   </section>
 }
 
+function JoinFamilyPage({ onSubmit }: { onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
+  return <section className="content-section join-family-section">
+    <div className="privacy-callout"><KeyRound size={20}/><div><strong>Join with your existing account.</strong><span>Enter the one-time code and passcode from a circle member, then confirm your password.</span></div></div>
+    <form className="join-family-form" onSubmit={onSubmit}>
+      <label>Invite code<input required name="inviteCode" autoComplete="off" maxLength={8} pattern="[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}" placeholder="8-character code"/></label>
+      <label>Invite passcode<input required name="invitePasscode" autoComplete="off" inputMode="numeric" maxLength={6} pattern="[0-9]{6}" placeholder="6-digit passcode"/></label>
+      <label>Confirm your account password<input required name="password" type="password" autoComplete="current-password" minLength={6} maxLength={128} placeholder="Your account password"/></label>
+      <button className="primary-button" type="submit"><UsersRound size={16}/>Join family circle</button>
+    </form>
+    <p className="join-family-note">Invite codes expire 15 minutes after they are created and can be used once.</p>
+  </section>
+}
+
 function PageContent(props: {
   page: PageKey; account: Account; circle: FamilyCircle | null; members: Account[]; selectedMember: Account | null; invite: InviteDraft;
   events: SafetyEvent[]; notifications: AppNotification[]; geoPoints: Record<string, GeoPoint>; locationError: string;
@@ -500,7 +568,7 @@ function PageContent(props: {
   if (page === 'wearable-device' || page === 'live-monitoring') return <section className="coming-soon-panel"><div className="coming-soon-art"><div className="device-circle"><Watch size={36}/><span className="device-plus">+</span></div><span className="device-star star-left"> </span><span className="device-star star-right"> </span><span className="device-orbit"/></div><span className="coming-label">COMING SOON</span><h2>{page === 'live-monitoring' ? 'Live monitoring needs a wearable.' : 'A more thoughtful kind of wearable.'}</h2><p>No device, sensor readings, battery status, or automatic health alerts are simulated. This page remains unavailable until compatible, validated hardware exists.</p><div className="sensor-list"><span><HeartPulse size={15}/>Health sensors</span><span><Activity size={15}/>Movement tracking</span><span><MapPin size={15}/>Location sharing</span></div></section>
   if (page === 'my-health') return <MyHealthOverview account={account} onOpenMedical={props.onOpenMedical} />
   if (page === 'family-members') return <section className="content-section"><div className="section-title-row"><div><h2>Your circle</h2><p>{members.length} {members.length === 1 ? 'member' : 'members'} in this browser.</p></div><button className="primary-button" onClick={props.onAdd}><Plus size={16}/>Generate invite</button></div>
-    <div className="invite-explainer"><KeyRound size={18}/><span>Any circle member can generate a one-time code and separate passcode. Every invited account joins as a member in this browser only. Credentials do not pair accounts across devices.</span></div>
+    <div className="invite-explainer"><KeyRound size={18}/><span>Any circle member can create a single-use code and passcode that expire in 15 minutes. New accounts and signed-in existing accounts can join this circle in this browser profile.</span></div>
     <div className="member-list page-member-list">{members.map((member) => <article className="member-row" key={member.id}><span className="member-avatar">{member.name.slice(0,1).toUpperCase()}</span><div className="member-info"><strong>{member.name}{member.id === account.id ? ' (you)' : ''}</strong><span>{member.id === circle?.ownerId ? 'Circle owner' : 'Circle member'} · {member.email}</span></div><span className="not-connected"><span className="neutral-dot"/>{member.id === account.id ? 'You' : 'Member'}</span><button className="row-action" onClick={() => props.onSelectMember(member.id)}>Profile<ArrowRight size={15}/></button></article>)}</div>
   </section>
   if (page === 'medical-information' || page === 'member-profile') {
@@ -535,7 +603,7 @@ function PageContent(props: {
   if (page === 'emergency-history') return <section className="content-section"><div className="section-title-row"><div><h2>Manual safety history</h2><p>These are user-created check-ins, not detected medical events.</p></div></div>{events.length === 0 ? <EmptyPanel title="No check-ins in this circle" description="You can create a manual check-in from Emergency center. Nothing is generated automatically." icon={<Clock3 size={21}/>} /> : <div className="event-list">{events.map((event) => { const person = members.find((item) => item.id === event.memberId); const responder = members.find((item) => item.id === event.responseBy); return <article className="event-row" key={event.id}><span className={`event-status status-${event.status}`}>{event.status}</span><div className="event-copy"><strong>{person?.name ?? 'Circle member'} · {event.summary}</strong><span>{new Date(event.createdAt).toLocaleString()}{responder ? ` · ${responder.name} is responding` : ''}</span></div><div className="event-actions">{event.status === 'open' && event.memberId !== account.id && <button className="outline-button" onClick={() => props.onUpdateEvent(event.id, 'responding')}>I&apos;m responding</button>}{event.status !== 'resolved' && event.status !== 'cancelled' && event.memberId === account.id && <button className="outline-button" onClick={() => props.onUpdateEvent(event.id, 'cancelled')}>Cancel</button>}{event.status === 'responding' && <button className="outline-button" onClick={() => props.onUpdateEvent(event.id, 'resolved')}>Mark resolved</button>}</div></article> })}</div>}</section>
   if (page === 'notifications') return <section className="content-section"><div className="section-title-row"><div><h2>Browser notifications</h2><p>New alerts can appear on this device while FamilyPulse is open. Other devices need a connected push service.</p></div>{typeof Notification !== 'undefined' && Notification.permission === 'default' ? <button className="outline-button" onClick={async () => { const permission = await Notification.requestPermission(); props.onNotify(permission === 'granted' ? 'Desktop alerts enabled for this browser.' : 'Desktop alerts were not enabled. Check browser notification settings.') }}><Bell size={15}/>Enable desktop alerts</button> : <span className="permission-state">{typeof Notification === 'undefined' ? 'DESKTOP ALERTS UNAVAILABLE' : Notification.permission === 'granted' ? 'DESKTOP ALERTS ON' : 'CHECK BROWSER SETTINGS'}</span>}</div>{notifications.length === 0 ? <EmptyPanel title="You're all caught up" description="New manual check-ins created in this browser can appear here for circle members." icon={<Bell size={21}/>} /> : <div className="notice-list">{notifications.map((notification) => <article className="notice-row" key={notification.id}><span className="notice-icon"><Bell size={16}/></span><div><strong>{notification.title}</strong><span>{notification.detail}</span><time>{new Date(notification.createdAt).toLocaleString()}</time></div></article>)}</div>}</section>
   if (page === 'privacy-permissions') return <section className="content-section"><div className="privacy-callout"><LockKeyhole size={20}/><div><strong>You control each information category.</strong><span>Permission changes apply to the member who is signed in. Circle members may view shared categories in this same browser.</span></div></div><div className="permission-list">{([['basic', 'Basic information', 'Name, date of birth, blood type and clinic'], ['medical', 'Medical information', 'Allergies, conditions, medications, insurance and notes'], ['emergency', 'Emergency information', 'Emergency phone number and response details'], ['location', 'Location sharing', 'Allows consenting circle members in this browser to view your current location'] ] as [keyof MemberPermissions, string, string][]).map(([key, title, note]) => <label className="permission-row permission-control" key={key}><div><strong>{title}</strong><span>{note}</span></div><input type="checkbox" checked={account.permissions[key]} onChange={(event) => props.onPermissionChange(key, event.target.checked)}/></label>)}</div><div className="inline-note"><LockKeyhole size={14}/>Your care details and sharing preferences are managed from this browser.</div></section>
-  if (page === 'family-settings') return <section className="content-section"><div className="settings-list"><div className="settings-row"><div><strong>Family Circle name</strong><span>{circle?.name}</span></div><span className="permission-state">{members.length} MEMBERS</span></div><div className="settings-row"><div><strong>Invite a member</strong><span>Generate an expiring one-time code and passcode. New accounts join as members.</span></div><button className="outline-button" onClick={props.onAdd}>Generate invite<Plus size={15}/></button></div>{circle?.ownerId === account.id && <><div className="settings-row"><div><strong>Manual reminder interval</strong><span>In-app guidance only; no calls or notifications are sent automatically.</span></div><select value={circle.escalationMinutes} onChange={(event) => props.onUpdateEscalation(Number(event.target.value))}><option value={2}>2 minutes</option><option value={5}>5 minutes</option><option value={10}>10 minutes</option><option value={15}>15 minutes</option></select></div><div className="settings-row"><div><strong>Automatic emergency escalation</strong><span>Not connected; only manual check-in records are available.</span></div><span className="permission-state">NOT ACTIVE</span></div></>}{circle?.ownerId !== account.id && <div className="settings-row"><div><strong>Circle administration</strong><span>Only the circle owner can change reminder settings or remove members.</span></div><span className="permission-state">MEMBER</span></div>}</div>{circle?.ownerId === account.id && members.filter((member) => member.id !== account.id).length > 0 && <div className="settings-list"><div className="settings-heading">REMOVE MEMBERS</div>{members.filter((member) => member.id !== account.id).map((member) => <div className="settings-row" key={member.id}><div><strong>{member.name}</strong><span>Remove this account from the circle in this browser.</span></div><button className="icon-button danger-icon" aria-label={`Remove ${member.name}`} onClick={() => props.onRemoveMember(member.id)}><Trash2 size={16}/></button></div>)}</div>}</section>
+  if (page === 'family-settings') return <section className="content-section"><div className="settings-list"><div className="settings-row"><div><strong>Family Circle name</strong><span>{circle?.name}</span></div><span className="permission-state">{members.length} MEMBERS</span></div><div className="settings-row"><div><strong>Invite a member</strong><span>Create a single-use code and passcode that expire in 15 minutes. New or existing accounts can join.</span></div><button className="outline-button" onClick={props.onAdd}>Generate invite<Plus size={15}/></button></div>{circle?.ownerId === account.id && <><div className="settings-row"><div><strong>Manual reminder interval</strong><span>In-app guidance only; no calls or notifications are sent automatically.</span></div><select value={circle.escalationMinutes} onChange={(event) => props.onUpdateEscalation(Number(event.target.value))}><option value={2}>2 minutes</option><option value={5}>5 minutes</option><option value={10}>10 minutes</option><option value={15}>15 minutes</option></select></div><div className="settings-row"><div><strong>Automatic emergency escalation</strong><span>Not connected; only manual check-in records are available.</span></div><span className="permission-state">NOT ACTIVE</span></div></>}{circle?.ownerId !== account.id && <div className="settings-row"><div><strong>Circle administration</strong><span>Only the circle owner can change reminder settings or remove members.</span></div><span className="permission-state">MEMBER</span></div>}</div>{circle?.ownerId === account.id && members.filter((member) => member.id !== account.id).length > 0 && <div className="settings-list"><div className="settings-heading">REMOVE MEMBERS</div>{members.filter((member) => member.id !== account.id).map((member) => <div className="settings-row" key={member.id}><div><strong>{member.name}</strong><span>Remove this account from the circle in this browser.</span></div><button className="icon-button danger-icon" aria-label={`Remove ${member.name}`} onClick={() => props.onRemoveMember(member.id)}><Trash2 size={16}/></button></div>)}</div>}</section>
   if (page === 'account-settings') return <section className="content-section"><div className="privacy-callout"><UserRound size={20}/><div><strong>{account.name}</strong><span>{account.email}</span></div></div><div className="settings-list"><div className="settings-row"><div><strong>Account preferences</strong><span>Manage your FamilyPulse profile and preferences.</span></div><span className="permission-state">ACCOUNT</span></div><div className="settings-row"><div><strong>Delete this browser&apos;s FamilyPulse data</strong><span>Removes every local account, circle, invite, profile, contact, and event.</span></div><button className="outline-button danger-button" onClick={props.onDeleteData}><Trash2 size={15}/>Delete local data</button></div></div></section>
   return <EmptyPanel title="No screen available" description="Choose another section from the navigation." icon={<CircleHelpIcon/>}/>
 }

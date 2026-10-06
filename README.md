@@ -20,7 +20,7 @@ When this folder opens in VS Code, approve the `Auto-push saved changes` task on
 ## Current capabilities
 
 - Accounts are stored in the browser's local storage. Passwords use PBKDF2-SHA-256 with a per-account salt and 600,000 iterations; older account hashes upgrade after a successful login.
-- Members can generate a one-time invite code and separate passcode. New invite records store a digest rather than the displayed credentials. Accounts can join a circle only in the same browser profile.
+- Members can generate a single-use invite code and separate passcode that expire after 15 minutes. New invite records store a digest rather than the displayed credentials. New or existing accounts can join in the same browser profile.
 - Members can edit their own profile, choose per-category sharing permissions, and add/remove emergency contacts. Call actions require a person to activate the phone's `tel:` handler.
 - My Health shows the saved blood group and clearly marks wearable-only heart rate, battery, and blood pressure as unavailable until a device is connected. Medical Information has an explicit Save action and a separate read-only saved view with Edit.
 - Location sharing requires explicit browser permission. Coordinates remain in memory only, can be removed by switching sharing off, and are not transmitted to other devices.

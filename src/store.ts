@@ -51,6 +51,7 @@ export type CircleInvite = {
   token?: string
   code?: string
   passcode?: string
+  createdAt?: number
   circleId: string
   createdBy: string
   expiresAt: number

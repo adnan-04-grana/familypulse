@@ -4,7 +4,13 @@ button { border: 0; cursor: pointer; }
 .sidebar-brand,.auth-brand { display: flex; align-items: center; gap: 9px; color: var(--navy); font-weight: 700; font-size: 17px; letter-spacing: -.3px; }
 .brand-mark { width: 31px; height: 31px; border-radius: 9px; display: grid; place-items: center; background: #eaf3ee; color: var(--green); }
 .brand-pulse { color: var(--green); }
-.circle-switcher { display: flex; align-items: center; width: 100%; padding: 10px 9px; margin-top: 28px; text-align: left; background: #f7f9f8; border: 1px solid #edf0ee; border-radius: 7px; gap: 9px; }
+.circle-switcher-wrap { position: relative; margin-top: 28px; }
+.circle-switcher { display: flex; align-items: center; width: 100%; padding: 10px 9px; margin-top: 0; text-align: left; background: #f7f9f8; border: 1px solid #edf0ee; border-radius: 7px; gap: 9px; }
+.circle-switcher-menu { position: absolute; z-index: 2; top: calc(100% + 6px); left: 0; right: 0; display: flex; flex-direction: column; gap: 3px; padding: 5px; background: #fff; border: 1px solid #e5ece8; border-radius: 6px; box-shadow: 0 8px 24px #1d34251a; }
+.circle-switcher-menu button { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 8px 9px; text-align: left; background: transparent; border-radius: 4px; }
+.circle-switcher-menu button:hover,.circle-switcher-menu button.selected { background: #eef5f0; }
+.circle-switcher-menu strong { color: #354a43; font-size: 10px; font-weight: 650; }
+.circle-switcher-menu small { color: #82918a; font-size: 9px; }
 .circle-avatar { width: 32px; height: 32px; display: grid; place-items: center; color: #497c69; background: #e8f1ec; border-radius: 6px; }
 .circle-copy,.account-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .circle-copy strong,.account-copy strong { font-size: 12px; font-weight: 650; color: #293b46; }
@@ -188,6 +194,13 @@ button { border: 0; cursor: pointer; }
 .invite-done { align-self: flex-end; }
 .invite-instructions { display: flex; flex-direction: column; align-items: flex-start; gap: 11px; margin-top: 12px; }
 .invite-instructions p { color: #748189; font-size: 10px; line-height: 1.65; }
+.join-family-section > .privacy-callout { margin-bottom: 18px; }
+.join-family-form { display: grid; width: min(100%, 430px); gap: 13px; }
+.join-family-form label { display: flex; flex-direction: column; gap: 6px; color: #526169; font-size: 10px; font-weight: 650; }
+.join-family-form input { width: 100%; height: 39px; padding: 0 10px; color: #36474f; background: #fff; border: 1px solid #dfe6e2; border-radius: 4px; font-size: 11px; }
+.join-family-form input::placeholder { color: #aab3b2; }
+.join-family-form .primary-button { justify-self: start; margin-top: 3px; }
+.join-family-note { margin: 16px 0 0; color: #899590; font-size: 9px; line-height: 1.55; }
 .sidebar { transform: translateX(-100%); transition: transform .22s ease; }
 .sidebar.sidebar-open { transform: translateX(0); }
 .main-panel { width: 100%; margin-left: 0; }
