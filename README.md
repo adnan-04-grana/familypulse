@@ -2,6 +2,8 @@
 
 FamilyPulse helps families organize health details, emergency contacts, family circles, and manual care check-ins in one workspace.
 
+Website: [https://adnan-04-grana.github.io/familypulse/](https://adnan-04-grana.github.io/familypulse/)
+
 ## Run locally
 
 ```sh

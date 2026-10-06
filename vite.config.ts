@@ -22,6 +22,7 @@ const securityHeaders = {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: process.env.GITHUB_ACTIONS === 'true' ? '/familypulse/' : '/',
   plugins: [react()],
   server: { headers: securityHeaders },
   preview: { headers: securityHeaders },
