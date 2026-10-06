@@ -77,6 +77,8 @@ const pendingPaths = new Set()
 let debounceTimer = null
 let retryTimer = null
 let syncing = false
+let paused = false
+let watcher
 
 function shouldIgnore(relativePath) {
   const normalized = relativePath.replaceAll('\\', '/')
@@ -94,9 +96,22 @@ function scheduleSync() {
 }
 
 async function pushChanges() {
-  const result = await runGit(['push', '-u', 'origin', 'main'])
+  let result = await runGit(['push', '-u', 'origin', 'main'])
   if (result.code === 0) {
     console.log('Auto-push complete: main is up to date on GitHub.')
+    return
+  }
+  console.log('Remote changed since the last sync; rebasing origin/main before retrying the push.')
+  const integration = await runGit(['pull', '--rebase', 'origin', 'main'])
+  if (integration.code !== 0) {
+    paused = true
+    watcher?.close()
+    console.error('Auto-push paused because remote changes could not be rebased cleanly. Resolve the Git conflict, then restart the task.')
+    return
+  }
+  result = await runGit(['push', '-u', 'origin', 'main'])
+  if (result.code === 0) {
+    console.log('Auto-push complete after rebasing origin/main.')
     return
   }
   console.error(`GitHub push failed. The commit is local; retrying in ${retryMs / 1000} seconds.`)
@@ -109,7 +124,7 @@ async function pushChanges() {
 }
 
 async function syncChanges() {
-  if (syncing || pendingPaths.size === 0) return
+  if (paused || syncing || pendingPaths.size === 0) return
   syncing = true
   const paths = [...pendingPaths]
   pendingPaths.clear()
@@ -144,8 +159,8 @@ if (initialStatus.stdout.trim()) {
   scheduleSync()
 }
 
-const watcher = watch(projectRoot, { recursive: true }, (_eventType, filename) => {
-  if (!filename) return
+watcher = watch(projectRoot, { recursive: true }, (_eventType, filename) => {
+  if (paused || !filename) return
   const relativePath = filename.toString().replaceAll('\\', '/')
   if (shouldIgnore(relativePath)) return
   pendingPaths.add(relativePath)
