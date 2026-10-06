@@ -416,7 +416,8 @@ function App() {
   function handleRemoveMember(memberId: string) {
     if (!circle || !account || circle.ownerId !== account.id || memberId === account.id) return
     const person = store.accounts.find((item) => item.id === memberId)
-    updateStore((currentStore) => ({ ...currentStore, circles: currentStore.circles.map((item) => item.id === circle.id ? { ...item, memberIds: item.memberIds.filter((id) => id !== memberId) } : item), accounts: currentStore.accounts.map((item) => item.id === memberId ? { ...item, circleId: makeId('detached') } : item) }))
+    const otherCircle = store.circles.find((item) => item.id !== circle.id && item.memberIds.includes(memberId))
+    updateStore((currentStore) => ({ ...currentStore, circles: currentStore.circles.map((item) => item.id === circle.id ? { ...item, memberIds: item.memberIds.filter((id) => id !== memberId) } : item), accounts: currentStore.accounts.map((item) => item.id === memberId ? { ...item, circleId: otherCircle?.id ?? makeId('detached') } : item) }))
     setSelectedMemberId(null)
     notify(`${person?.name ?? 'Member'} has been removed from this circle.`)
   }
