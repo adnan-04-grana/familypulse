@@ -14,10 +14,19 @@ dist-ssr
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+.npmrc
+credentials*.json
+service-account*.json
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/tasks.json
 .idea
 .DS_Store
 *.suo

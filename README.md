@@ -11,6 +11,10 @@ npm run dev
 
 Open the local URL printed by Vite. To create a production build, run `npm run build`.
 
+## Automatic GitHub updates
+
+When this folder opens in VS Code, approve the `Auto-push saved changes` task once. It watches project files, waits 1.8 seconds after the last save, then commits and pushes the changes to `origin/main`. Rapid saves are grouped into one commit. Stop the watcher with `Ctrl+C` in its VS Code terminal. Review changes before saving; each save can publish unfinished work.
+
 ## Current capabilities
 
 - Accounts are stored in the browser's local storage. Passwords use PBKDF2-SHA-256 with a per-account salt and 600,000 iterations; older account hashes upgrade after a successful login.
