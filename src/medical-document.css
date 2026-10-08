@@ -1,3 +1,5 @@
+.medical-document-preview { margin: 0; background: #f5f7f6; }
+
 .medical-document-page {
   --navy: #1c2f39;
   --green: #285b49;
@@ -95,6 +97,7 @@
 }
 
 @media print {
+  body.medical-document-preview { background: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .medical-document-page { width: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible; font-size: 10pt; }
   .medical-document-header { padding: 12pt 14pt; }
   .medical-document-content { padding: 14pt; }

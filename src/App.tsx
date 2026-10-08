@@ -797,7 +797,7 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
         <title>FamilyPulse Medical ID</title>
         <style>${medicalDocumentStyles}\n@page { size: auto; margin: 12mm; }</style>
       </head>
-      <body>
+      <body class="medical-document-preview">
         <div class="medical-document-page">
           <div class="medical-document-header">
             <div class="medical-document-brand"><span class="medical-document-brand-mark">❤</span>family<span style="color: #285b49;">pulse</span></div>
