@@ -781,33 +781,58 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
       <html lang="en">
       <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>FamilyPulse Medical ID</title>
         <style>
           :root { --navy: #1c2f39; --green: #285b49; --soft: #edf5f0; --paper: #ffffff; --line: #dfe9e4; --muted: #71828a; }
           * { box-sizing: border-box; }
-          body { margin: 0; font-family: Arial, sans-serif; background: #f5f7f6; color: var(--navy); }
-          .page { width: 100%; max-width: 860px; margin: 28px auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 14px 36px rgba(13, 25, 23, 0.08); }
-          .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(180deg, #edf6f0 0%, #ffffff 100%); padding: 24px 28px; border-bottom: 1px solid var(--line); }
-          .brand { display: flex; align-items: center; gap: 11px; font-size: 28px; font-weight: 700; color: var(--navy); }
-          .brand-mark { display: inline-grid; place-items: center; width: 38px; height: 38px; margin-right: 2px; border-radius: 10px; background: #e2f0e8; color: var(--green); }
-          .tag { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 999px; background: #edf5f0; color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: .7px; }
-          .content { padding: 28px; }
-          .hero { display: grid; grid-template-columns: 1.2fr .8fr; gap: 22px; }
-          .panel { border: 1px solid var(--line); border-radius: 10px; padding: 18px; background: #fff; }
+          html { font-size: clamp(14px, 1.6vw, 16px); }
+          body { margin: 0; font-family: Arial, sans-serif; background: #f5f7f6; color: var(--navy); font-size: 1rem; }
+          .page { width: min(calc(100% - 32px), 860px); margin: 28px auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 14px 36px rgba(13, 25, 23, 0.08); }
+          .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(180deg, #edf6f0 0%, #ffffff 100%); padding: clamp(16px, 3vw, 24px) clamp(16px, 3.3vw, 28px); border-bottom: 1px solid var(--line); }
+          .brand { display: flex; align-items: center; gap: 11px; font-size: clamp(1.25rem, 3vw, 1.75rem); font-weight: 700; color: var(--navy); }
+          .brand-mark { display: inline-grid; place-items: center; flex: 0 0 auto; width: 2.375rem; height: 2.375rem; margin-right: 2px; border-radius: 10px; background: #e2f0e8; color: var(--green); }
+          .tag { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 999px; background: #edf5f0; color: var(--green); font-size: .6875rem; font-weight: 700; letter-spacing: .7px; }
+          .content { padding: clamp(16px, 3.3vw, 28px); }
+          .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: clamp(12px, 2.5vw, 22px); }
+          .panel { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: clamp(14px, 2.2vw, 18px); background: #fff; }
           .meta { display: grid; gap: 10px; }
-          .meta strong { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
-          .meta h1 { margin: 0; font-size: 30px; color: var(--navy); }
-          .meta p { margin: 0; color: #58706a; line-height: 1.6; }
+          .meta strong { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+          .meta h1 { margin: 0; font-size: clamp(1.5rem, 3.5vw, 1.875rem); overflow-wrap: anywhere; color: var(--navy); }
+          .meta p { margin: 0; color: #58706a; line-height: 1.6; overflow-wrap: anywhere; }
           .code-box { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-          .code-box img { max-width: 100%; }
-          .code-value { font-family: 'Consolas', monospace; letter-spacing: 2px; font-size: 18px; font-weight: 700; color: var(--green); }
-          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
-          .item { border: 1px solid var(--line); border-radius: 8px; padding: 13px 14px; }
-          .item span { display: block; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
-          .item strong { display: block; color: var(--navy); font-size: 15px; line-height: 1.5; }
-          .notes { margin-top: 22px; border: 1px solid var(--line); border-radius: 8px; padding: 15px 16px; background: #f9fbfa; }
-          .notes h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
-          .notes p { margin: 0; color: var(--navy); line-height: 1.6; }
+          .code-box img { display: block; width: min(100%, 220px); height: auto; }
+          .code-value { max-width: 100%; overflow-wrap: anywhere; font-family: 'Consolas', monospace; letter-spacing: .08em; font-size: clamp(.875rem, 2vw, 1.125rem); font-weight: 700; color: var(--green); }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 2vw, 18px); margin-top: 22px; }
+          .item { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 13px 14px; break-inside: avoid; }
+          .item span { display: block; font-size: .625rem; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+          .item strong { display: block; color: var(--navy); font-size: clamp(.875rem, 1.7vw, .9375rem); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+          .notes { margin-top: 22px; border: 1px solid var(--line); border-radius: 8px; padding: 15px 16px; background: #f9fbfa; break-inside: avoid; }
+          .notes h3 { margin: 0 0 8px; font-size: .75rem; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+          .notes p { margin: 0; color: var(--navy); line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+          @media (max-width: 600px) {
+            .page { width: calc(100% - 24px); margin: 12px auto; }
+            .header { flex-wrap: wrap; gap: 10px; }
+            .hero, .grid { grid-template-columns: minmax(0, 1fr); }
+            .grid { gap: 10px; margin-top: 14px; }
+            .notes { margin-top: 14px; }
+          }
+          @page { size: auto; margin: 12mm; }
+          @media print {
+            html { font-size: 10pt; }
+            body { background: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .page { width: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+            .header { padding: 12pt 14pt; }
+            .content { padding: 14pt; }
+            .hero { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 10pt; }
+            .panel { padding: 10pt; }
+            .meta h1 { font-size: 22pt; }
+            .code-box img { width: min(100%, 48mm); }
+            .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8pt; margin-top: 12pt; }
+            .item { padding: 8pt; }
+            .notes { margin-top: 12pt; padding: 9pt 10pt; }
+            .notes img { max-width: 100%; height: auto; }
+          }
         </style>
       </head>
       <body>
