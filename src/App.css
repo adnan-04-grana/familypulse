@@ -256,6 +256,18 @@ button { border: 0; cursor: pointer; }
 .health-metric-red .health-metric-top svg { color: #af746a; }.health-metric-amber .health-metric-top svg { color: #a38654; }
 .health-profile-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; background: #fff; border: 1px solid #e8eeea; border-radius: 5px; }
 .health-profile-link > div { display: flex; flex-direction: column; gap: 4px; }.health-profile-link strong { color: #44564c; font-size: 10px; }.health-profile-link span { color: #89948e; font-size: 9px; line-height: 1.5; }
+.overview-medical-code { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: #fff; border: 1px solid #e8eeea; border-radius: 5px; }
+.overview-medical-code-id { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.overview-medical-code-id > span { color: #89958f; font-size: 8px; font-weight: 700; letter-spacing: .7px; }
+.overview-medical-code-id > strong { color: #40514a; font-family: ui-monospace, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.overview-medical-code-id .subtle-link { align-self: flex-start; margin-top: 2px; font-size: 9px; }
+.overview-medical-qr { display: block; flex: 0 0 72px; width: 72px; height: 72px; object-fit: contain; }
+.overview-medical-barcode { display: block; flex: 0 1 148px; width: 148px; max-height: 46px; object-fit: contain; }
+@media (max-width: 620px) {
+	.overview-medical-code { gap: 8px; }
+	.overview-medical-qr { flex-basis: 60px; width: 60px; height: 60px; }
+	.overview-medical-barcode { flex-basis: 110px; width: 110px; max-height: 40px; }
+}
 .medical-profile-page { display: flex; flex-direction: column; gap: 16px; }
 .profile-page-heading { display: flex; align-items: center; gap: 12px; }.profile-page-heading .privacy-callout { flex: 1; }.profile-page-heading > .outline-button { flex: 0 0 auto; }
 .medical-identity-card { margin: 0 0 18px; padding: 16px; background: linear-gradient(180deg, #edf6f1 0%, #ffffff 100%); border: 1px solid #dfeae4; border-radius: 8px; }
