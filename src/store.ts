@@ -87,6 +87,8 @@ export type LocalStore = {
 }
 
 const STORAGE_KEY = 'familypulse-local-v1'
+const MEDICAL_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const MEDICAL_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{32}$/
 
 export function emptyStore(): LocalStore {
   return { accounts: [], circles: [], invites: [], events: [], notifications: [] }
@@ -100,11 +102,18 @@ export function readStore(): LocalStore {
     if (!value || typeof value !== 'object') return emptyStore()
     const store = value as Partial<LocalStore>
     const accounts = Array.isArray(store.accounts) ? store.accounts : []
+    const usedMedicalCodes = new Set<string>()
     return {
-      accounts: accounts.map((account) => ({
-        ...account,
-        medicalId: typeof account.medicalId === 'string' && account.medicalId.length === 32 ? account.medicalId : makeMedicalCode(),
-      })),
+      accounts: accounts.map((account) => {
+        const savedCode = typeof account.medicalId === 'string' && MEDICAL_CODE_PATTERN.test(account.medicalId)
+          ? account.medicalId
+          : ''
+        const medicalId = savedCode && !usedMedicalCodes.has(savedCode)
+          ? savedCode
+          : makeMedicalCode(usedMedicalCodes)
+        usedMedicalCodes.add(medicalId)
+        return { ...account, medicalId }
+      }),
       circles: Array.isArray(store.circles) ? store.circles : [],
       invites: Array.isArray(store.invites) ? store.invites : [],
       events: Array.isArray(store.events) ? store.events : [],
@@ -143,11 +152,15 @@ export function makeInvitePasscode() {
   return String(((((bytes[0] * 256 + bytes[1]) * 256 + bytes[2]) * 256 + bytes[3]) >>> 0) % 1000000).padStart(6, '0')
 }
 
-export function makeMedicalCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const bytes = new Uint8Array(24)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('').slice(0, 32)
+export function makeMedicalCode(existingCodes: Iterable<string> = []) {
+  const usedCodes = new Set(existingCodes)
+  const bytes = new Uint8Array(32)
+  let code: string
+  do {
+    crypto.getRandomValues(bytes)
+    code = Array.from(bytes, (byte) => MEDICAL_CODE_ALPHABET[byte & 31]).join('')
+  } while (usedCodes.has(code))
+  return code
 }
 
 export function makePasswordSalt() {

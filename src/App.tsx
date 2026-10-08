@@ -354,7 +354,7 @@ function App() {
       const circleId = makeId('circle')
       const salt = makePasswordSalt()
       const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId, medicalId: makeMedicalCode(), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
+      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId, medicalId: makeMedicalCode(store.accounts.map((item) => item.medicalId)), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
       const newCircle: FamilyCircle = { id: circleId, name: `${name.split(' ')[0]}'s Family Circle`, ownerId: id, memberIds: [id], escalationMinutes: 5 }
       updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: [...currentStore.circles, newCircle] }))
       sessionStorage.setItem('familypulse-session', id)
@@ -374,7 +374,7 @@ function App() {
       const id = makeId('person')
       const salt = makePasswordSalt()
       const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId: invite.circleId, medicalId: makeMedicalCode(), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
+      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId: invite.circleId, medicalId: makeMedicalCode(store.accounts.map((item) => item.medicalId)), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
       updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: currentStore.circles.map((item) => item.id === invite.circleId ? { ...item, memberIds: [...item.memberIds, id] } : item), invites: currentStore.invites.filter((item) => item !== invite) }))
       sessionStorage.setItem('familypulse-session', id)
       sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(timestampNow()))
@@ -449,7 +449,7 @@ function App() {
   }
   function saveProfile(profile: Account['profile']) {
     if (!account) return
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, profile, profileSaved: true, medicalId: item.medicalId || makeMedicalCode() } : item) }))
+    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, profile, profileSaved: true, medicalId: item.medicalId || makeMedicalCode(currentStore.accounts.map((storedAccount) => storedAccount.medicalId)) } : item) }))
   }
   function updatePermission(field: keyof MemberPermissions, checked: boolean) {
     if (!account) return
