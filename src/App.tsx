@@ -8,7 +8,7 @@ import {
 import { divIcon } from 'leaflet'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
-import LZString from 'lz-string'
+import { gunzipSync, gzipSync, strFromU8, strToU8 } from 'fflate'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -38,34 +38,67 @@ function isInviteActive(invite: CircleInvite, now = timestampNow()) {
 const SESSION_ACTIVITY_KEY = 'familypulse-session-last-active'
 const SESSION_IDLE_LIMIT = 15 * 60 * 1000
 
-function buildMedicalPayload(account: Account) {
+type MedicalRescuePayload = {
+  i: string
+  n: string
+  dob: string
+  bt: string
+  a: string
+  c: string
+  med: string
+  doc: string
+  ins: string
+  en: string
+  notes: string
+  ec: [string, string, string][]
+}
+
+function buildMedicalPayload(account: Account): MedicalRescuePayload {
   return {
-    id: account.medicalId,
-    name: account.name,
-    dateOfBirth: account.profile.dateOfBirth || 'Not provided',
-    bloodType: account.profile.bloodType || 'Not provided',
-    allergies: account.profile.allergies || 'Not provided',
-    conditions: account.profile.conditions || 'Not provided',
-    medications: account.profile.medications || 'Not provided',
-    doctor: account.profile.doctor || 'Not provided',
-    insurance: account.profile.insurance || 'Not provided',
-    emergencyNumber: account.profile.emergencyNumber || 'Not provided',
+    i: account.medicalId,
+    n: account.name,
+    dob: account.profile.dateOfBirth || 'Not provided',
+    bt: account.profile.bloodType || 'Not provided',
+    a: account.profile.allergies || 'Not provided',
+    c: account.profile.conditions || 'Not provided',
+    med: account.profile.medications || 'Not provided',
+    doc: account.profile.doctor || 'Not provided',
+    ins: account.profile.insurance || 'Not provided',
+    en: account.profile.emergencyNumber || 'Not provided',
     notes: account.profile.notes || 'Not provided',
-    emergencyContacts: account.contacts.map(({ name, relationship, phone }) => ({ name, relationship, phone })),
+    ec: account.contacts.map(({ name, relationship, phone }) => [name, relationship, phone] as [string, string, string]),
   }
 }
 
-type MedicalRescuePayload = ReturnType<typeof buildMedicalPayload>
+function encodeMedicalPayload(value: string) {
+  const bytes = gzipSync(strToU8(value))
+  let binary = ''
+  for (let start = 0; start < bytes.length; start += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000))
+  }
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+}
+
+function decodeMedicalPayload(value: string) {
+  try {
+    const base64 = value.replaceAll('-', '+').replaceAll('_', '/')
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+    const binary = atob(padded)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return strFromU8(gunzipSync(bytes))
+  } catch {
+    return null
+  }
+}
 
 function readMedicalRescuePayload(): MedicalRescuePayload | null {
   const prefix = '#rescue='
   if (!window.location.hash.startsWith(prefix)) return null
   try {
-    const encoded = decodeURIComponent(window.location.hash.slice(prefix.length))
-    const serialized = LZString.decompressFromEncodedURIComponent(encoded)
+    const serialized = decodeMedicalPayload(window.location.hash.slice(prefix.length))
     if (!serialized) return null
     const payload: unknown = JSON.parse(serialized)
-    if (!payload || typeof payload !== 'object' || typeof (payload as MedicalRescuePayload).name !== 'string') return null
+    if (!payload || typeof payload !== 'object' || typeof (payload as MedicalRescuePayload).n !== 'string' || !Array.isArray((payload as MedicalRescuePayload).ec)) return null
     return payload as MedicalRescuePayload
   } catch {
     return null
@@ -670,9 +703,12 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
   const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
   const canEdit = ownProfile
   const medicalPayload = JSON.stringify(buildMedicalPayload(profile))
-  const rescueUrl = new URL(window.location.href)
-  rescueUrl.search = ''
-  rescueUrl.hash = `rescue=${encodeURIComponent(LZString.compressToEncodedURIComponent(medicalPayload))}`
+  const rescueUrl = useMemo(() => {
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.hash = `rescue=${encodeMedicalPayload(medicalPayload)}`
+    return url.toString()
+  }, [medicalPayload])
 
   useEffect(() => {
     if (!ownProfile) {
@@ -711,7 +747,7 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
     }
     void renderCards()
     return () => { cancelled = true }
-  }, [medicalPayload, ownProfile, profile.medicalId])
+  }, [rescueUrl, ownProfile, profile.medicalId])
 
   function updateField(field: keyof Account['profile'], value: string) {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -824,14 +860,14 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
 
 function MedicalRescuePage({ profile }: { profile: MedicalRescuePayload }) {
   const details = [
-    ['Date of birth', profile.dateOfBirth],
-    ['Blood type', profile.bloodType],
-    ['Allergies', profile.allergies],
-    ['Medical conditions', profile.conditions],
-    ['Medications', profile.medications],
-    ['Doctor or clinic', profile.doctor],
-    ['Insurance', profile.insurance],
-    ['Emergency number', profile.emergencyNumber],
+    ['Date of birth', profile.dob],
+    ['Blood type', profile.bt],
+    ['Allergies', profile.a],
+    ['Medical conditions', profile.c],
+    ['Medications', profile.med],
+    ['Doctor or clinic', profile.doc],
+    ['Insurance', profile.ins],
+    ['Emergency number', profile.en],
     ['Medical notes', profile.notes],
   ]
 
@@ -841,11 +877,11 @@ function MedicalRescuePage({ profile }: { profile: MedicalRescuePayload }) {
       <span className="tag">RESCUE MEDICAL ID</span>
     </header>
     <div className="medical-rescue-alert"><AlertCircle size={19}/><div><strong>Emergency medical profile</strong><span>For urgent help, contact local emergency services.</span></div></div>
-    <section className="medical-rescue-identity"><span className="eyebrow">PERSON</span><h1>{profile.name}</h1><p>Medical ID <code>{profile.id}</code></p></section>
+    <section className="medical-rescue-identity"><span className="eyebrow">PERSON</span><h1>{profile.n}</h1><p>Medical ID <code>{profile.i}</code></p></section>
     <section className="medical-rescue-details" aria-label="Medical information">
       {details.map(([label, value]) => <div className="medical-rescue-detail" key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </section>
-    <section className="medical-rescue-contacts"><h2>Emergency contacts</h2>{profile.emergencyContacts.length ? <div>{profile.emergencyContacts.map((contact, index) => <article key={`${contact.phone}-${index}`}><strong>{contact.name}</strong><span>{contact.relationship}</span><a href={`tel:${contact.phone.replace(/[^+\d]/g, '')}`}>{contact.phone}</a></article>)}</div> : <p>No emergency contacts provided.</p>}</section>
+    <section className="medical-rescue-contacts"><h2>Emergency contacts</h2>{profile.ec.length ? <div>{profile.ec.map(([name, relationship, phone], index) => <article key={`${phone}-${index}`}><strong>{name}</strong><span>{relationship}</span><a href={`tel:${phone.replace(/[^+\d]/g, '')}`}>{phone}</a></article>)}</div> : <p>No emergency contacts provided.</p>}</section>
     <footer className="medical-rescue-footer">FamilyPulse · Information shared by the profile owner</footer>
   </main>
 }
