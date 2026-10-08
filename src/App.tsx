@@ -721,6 +721,32 @@ function PageContent(props: {
 
 function CircleHelpIcon() { return <ShieldCheck size={21}/> }
 
+function MedicalCodeOverview({ account, onOpenMedical }: { account: Account; onOpenMedical: () => void }) {
+  const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
+  const medicalPayload = JSON.stringify(buildMedicalPayload(account))
+  const rescueUrl = useMemo(() => {
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.hash = `rescue=${encodeMedicalPayload(medicalPayload)}`
+    return url.toString()
+  }, [medicalPayload])
+
+  useEffect(() => {
+    let cancelled = false
+    void generateMedicalCard(rescueUrl, account.medicalId)
+      .then((card) => { if (!cancelled) setMedicalCard(card) })
+      .catch(() => { if (!cancelled) setMedicalCard(null) })
+    return () => { cancelled = true }
+  }, [rescueUrl, account.medicalId])
+
+  if (!medicalCard) return null
+  return <section className="overview-medical-code" aria-label="Medical ID codes">
+    <div className="overview-medical-code-id"><span>MEDICAL ID</span><strong>{account.medicalId}</strong><button className="subtle-link" onClick={onOpenMedical}>Medical information<ArrowRight size={14}/></button></div>
+    <img className="overview-medical-qr" src={medicalCard.qr} alt="Medical ID QR code" />
+    <img className="overview-medical-barcode" src={medicalCard.barcode} alt="Medical ID barcode" />
+  </section>
+}
+
 function MyHealthOverview({ account, onOpenMedical }: { account: Account; onOpenMedical: () => void }) {
   const readings = [
     { label: 'Heart rate', value: '--', unit: 'BPM', detail: 'Live reading needs a paired wearable', icon: HeartPulse, style: 'health-metric-green' },
@@ -841,7 +867,7 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
 
   return <section className={`content-section medical-profile-page ${editing ? 'is-editing' : 'is-saved'}`}>
     <div className="profile-page-heading"><div className="privacy-callout"><ShieldCheck size={20}/><div><strong>{ownProfile ? editing ? 'Edit your medical information.' : 'Your medical information is saved.' : `Information shared by ${profile.name}.`}</strong><span>{ownProfile ? editing ? 'Changes stay as a draft until you press Save.' : 'This read-only view shows the details currently saved in your browser.' : 'Only categories this member chose to share are visible.'}</span></div></div>{canEdit && !editing && <button className="outline-button" onClick={() => setEditing(true)}>Edit profile<Pencil size={14}/></button>}</div>
-    {ownProfile && ((medicalCard && medicalCard.qr && medicalCard.barcode) || editing) && <div className="medical-identity-card"><div className="medical-identity-header"><div><span className="eyebrow">PERSONAL MEDICAL ID</span><h3>{profile.medicalId}</h3></div><button className="outline-button" onClick={openMedicalPdf}>Open PDF</button></div><div className="medical-identity-body"><div className="medical-identity-qr"><img src={medicalCard?.qr || ''} alt="Medical QR code" /></div><div className="medical-identity-code"><span>Unique medical ID</span><strong>{profile.medicalId}</strong><img src={medicalCard?.barcode || ''} alt="Medical barcode" /></div></div><div className="medical-identity-actions"><button className="outline-button" onClick={() => downloadDataAsset('qr', `${profile.name.toLowerCase().replace(/\s+/g, '-')}-medical-qr.png`)}>Download QR</button><button className="outline-button" onClick={() => downloadDataAsset('barcode', `${profile.name.toLowerCase().replace(/\s+/g, '-')}-medical-barcode.png`)}>Download barcode</button></div><p>Created once for this account and updated automatically when your medical information changes.</p></div>}
+    {ownProfile && medicalCard && <div className="medical-identity-card"><div className="medical-identity-header"><div><span className="eyebrow">PERSONAL MEDICAL ID</span><h3>{profile.medicalId}</h3></div><button className="outline-button" onClick={openMedicalPdf}>Open PDF</button></div><div className="medical-identity-actions"><button className="outline-button" onClick={() => downloadDataAsset('qr', `${profile.name.toLowerCase().replace(/\s+/g, '-')}-medical-qr.png`)}>Download QR</button><button className="outline-button" onClick={() => downloadDataAsset('barcode', `${profile.name.toLowerCase().replace(/\s+/g, '-')}-medical-barcode.png`)}>Download barcode</button></div></div>}
     {editing ? <div className="profile-form-grid">{fields.map((field) => <label className={field.type === 'textarea' ? 'wide-field' : ''} key={field.key}>{field.label}{field.type === 'select' ? <select value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)}>{field.options?.map((option) => <option key={option} value={option}>{option || 'Select blood type'}</option>)}</select> : field.type === 'textarea' ? <textarea rows={3} maxLength={2000} value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)} placeholder="Add only what you choose to store"/> : <input type={field.type ?? 'text'} maxLength={field.type === 'date' ? undefined : 120} value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)} placeholder="Not added"/>}</label>)}</div> : <div className="saved-profile-grid">{fields.map((field) => { const visible = ownProfile || (field.access === 'basic' ? canSeeBasic : field.access === 'medical' ? canSeePrivate : profile.permissions.emergency); return <div className="saved-profile-item" key={field.key}><span>{field.label}</span><strong>{!visible ? 'Not shared' : profile.profile[field.key] || 'Not provided'}</strong></div> })}</div>}
     {ownProfile && editing && <div className="profile-form-actions"><span className="inline-note"><LockKeyhole size={14}/>Changes save to your FamilyPulse profile.</span><div><button className="outline-button" onClick={cancel}>Cancel</button><button className="primary-button" onClick={save}><Save size={15}/>Save medical information</button></div></div>}
   </section>
