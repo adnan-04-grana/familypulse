@@ -256,6 +256,18 @@ button { border: 0; cursor: pointer; }
 .health-profile-link > div { display: flex; flex-direction: column; gap: 4px; }.health-profile-link strong { color: #44564c; font-size: 10px; }.health-profile-link span { color: #89948e; font-size: 9px; line-height: 1.5; }
 .medical-profile-page { display: flex; flex-direction: column; gap: 16px; }
 .profile-page-heading { display: flex; align-items: center; gap: 12px; }.profile-page-heading .privacy-callout { flex: 1; }.profile-page-heading > .outline-button { flex: 0 0 auto; }
+.medical-identity-card { margin: 0 0 18px; padding: 16px; background: linear-gradient(180deg, #edf6f1 0%, #ffffff 100%); border: 1px solid #dfeae4; border-radius: 8px; }
+.medical-identity-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.medical-identity-header .eyebrow { margin: 0 0 4px; color: #6d8e7a; }
+.medical-identity-header h3 { margin: 0; color: #204b3d; font-size: 16px; letter-spacing: .9px; }
+.medical-identity-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: center; }
+.medical-identity-qr { display: grid; place-items: center; padding: 10px; background: white; border: 1px solid #e2eae5; border-radius: 8px; }
+.medical-identity-qr img { display: block; width: 160px; height: 160px; object-fit: contain; }
+.medical-identity-code { display: flex; flex-direction: column; gap: 8px; }
+.medical-identity-code span { color: #7a8d86; font-size: 9px; font-weight: 700; letter-spacing: .9px; text-transform: uppercase; }
+.medical-identity-code strong { color: #21463b; font-size: 20px; letter-spacing: 2px; font-family: ui-monospace, Consolas, monospace; }
+.medical-identity-code img { display: block; width: min(100%, 340px); height: auto; margin-top: 4px; border: 1px solid #e3ebe6; border-radius: 6px; background: #fff; }
+.medical-identity-card p { margin: 12px 0 0; color: #768680; font-size: 9px; line-height: 1.6; }
 .saved-profile-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 20px; padding: 3px 2px; }
 .saved-profile-item { display: flex; flex-direction: column; gap: 5px; min-height: 59px; padding: 10px 0; border-bottom: 1px solid #edf0ee; }
 .saved-profile-item span { color: #89958f; font-size: 9px; }.saved-profile-item strong { color: #40514a; font-size: 10px; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }

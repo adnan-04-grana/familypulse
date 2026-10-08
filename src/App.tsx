@@ -12,7 +12,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
   blankPermissions, blankProfile, emptyStore, hashPassword, makeId, makeInviteCode,
-  makeInvitePasscode, makePasswordSalt, hashInviteCredentials, PASSWORD_HASH_ITERATIONS, readStore, saveStore,
+  makeInvitePasscode, makeMedicalCode, makePasswordSalt, hashInviteCredentials, PASSWORD_HASH_ITERATIONS, readStore, saveStore,
   type Account, type AppNotification, type CircleInvite, type EmergencyContact,
   type FamilyCircle, type LocalStore, type MemberPermissions,
   type SafetyEvent,
@@ -354,7 +354,7 @@ function App() {
       const circleId = makeId('circle')
       const salt = makePasswordSalt()
       const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId, medicalId: makeId('med').replace('med_', '').slice(0, 32).toUpperCase() || 'FAM1LYPULSE0000000000000000', profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
+      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId, medicalId: makeMedicalCode(), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
       const newCircle: FamilyCircle = { id: circleId, name: `${name.split(' ')[0]}'s Family Circle`, ownerId: id, memberIds: [id], escalationMinutes: 5 }
       updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: [...currentStore.circles, newCircle] }))
       sessionStorage.setItem('familypulse-session', id)
@@ -374,7 +374,7 @@ function App() {
       const id = makeId('person')
       const salt = makePasswordSalt()
       const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId: invite.circleId, medicalId: makeId('med').replace('med_', '').slice(0, 32).toUpperCase() || 'FAM1LYPULSE0000000000000000', profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
+      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId: invite.circleId, medicalId: makeMedicalCode(), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
       updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: currentStore.circles.map((item) => item.id === invite.circleId ? { ...item, memberIds: [...item.memberIds, id] } : item), invites: currentStore.invites.filter((item) => item !== invite) }))
       sessionStorage.setItem('familypulse-session', id)
       sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(timestampNow()))
@@ -449,7 +449,7 @@ function App() {
   }
   function saveProfile(profile: Account['profile']) {
     if (!account) return
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, profile, profileSaved: true, medicalId: item.medicalId || 'FAM1LYPULSE0000000000000000' } : item) }))
+    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, profile, profileSaved: true, medicalId: item.medicalId || makeMedicalCode() } : item) }))
   }
   function updatePermission(field: keyof MemberPermissions, checked: boolean) {
     if (!account) return
