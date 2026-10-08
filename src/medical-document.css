@@ -1,0 +1,110 @@
+.medical-document-page {
+  --navy: #1c2f39;
+  --green: #285b49;
+  --paper: #ffffff;
+  --line: #dfe9e4;
+  --muted: #71828a;
+  width: min(calc(100% - 32px), 860px);
+  margin: 28px auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 14px 36px rgba(13, 25, 23, 0.08);
+  color: var(--navy);
+  font-family: Arial, sans-serif;
+  font-size: clamp(14px, 1.6vw, 16px);
+}
+
+.medical-document-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: clamp(16px, 3vw, 24px) clamp(16px, 3.3vw, 28px);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, #edf6f0 0%, #ffffff 100%);
+}
+
+.medical-document-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--navy);
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-weight: 700;
+}
+
+.medical-document-brand-mark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.375rem;
+  height: 2.375rem;
+  margin-right: 2px;
+  border-radius: 10px;
+  background: #e2f0e8;
+  color: var(--green);
+}
+
+.medical-document-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #edf5f0;
+  color: var(--green);
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .7px;
+}
+
+.medical-document-content { padding: clamp(16px, 3.3vw, 28px); }
+.medical-document-hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: clamp(12px, 2.5vw, 22px); }
+.medical-document-panel { min-width: 0; padding: clamp(14px, 2.2vw, 18px); border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.medical-document-meta { display: grid; gap: 10px; }
+.medical-document-meta > strong { color: var(--muted); font-size: .75rem; letter-spacing: .8px; text-transform: uppercase; }
+.medical-document-meta h1 { margin: 0; color: var(--navy); font-size: clamp(1.5rem, 3.5vw, 1.875rem); overflow-wrap: anywhere; }
+.medical-document-meta p { margin: 0; color: #58706a; line-height: 1.6; overflow-wrap: anywhere; }
+.medical-document-meta p strong { color: var(--muted); font-size: .75rem; letter-spacing: .8px; text-transform: uppercase; }
+.medical-document-code-box { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.medical-document-code-box img { display: block; width: min(100%, 220px); height: auto; }
+.medical-document-code-value { max-width: 100%; color: var(--green); font-family: Consolas, monospace; font-size: clamp(.875rem, 2vw, 1.125rem); font-weight: 700; letter-spacing: .08em; overflow-wrap: anywhere; }
+.medical-document-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 2vw, 18px); margin-top: 22px; }
+.medical-document-item { min-width: 0; padding: 13px 14px; border: 1px solid var(--line); border-radius: 8px; break-inside: avoid; }
+.medical-document-item span { display: block; margin-bottom: 7px; color: var(--muted); font-size: .625rem; letter-spacing: .8px; text-transform: uppercase; }
+.medical-document-item strong { display: block; color: var(--navy); font-size: clamp(.875rem, 1.7vw, .9375rem); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.medical-document-notes { margin-top: 22px; padding: 15px 16px; border: 1px solid var(--line); border-radius: 8px; background: #f9fbfa; break-inside: avoid; }
+.medical-document-notes h2 { margin: 0 0 8px; color: var(--muted); font-size: .75rem; letter-spacing: .8px; text-transform: uppercase; }
+.medical-document-notes p { margin: 0; color: var(--navy); line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.medical-document-barcode { display: block; width: min(100%, 340px); height: auto; margin-top: 8px; }
+.medical-document-contact-list { border-top: 1px solid var(--line); }
+.medical-document-contact { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: .75rem; break-inside: avoid; }
+.medical-document-contact strong { color: var(--navy); }
+.medical-document-contact span { color: var(--muted); }
+.medical-document-contact a { color: var(--green); font-weight: 650; overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+  .medical-document-page { width: calc(100% - 24px); margin: 12px auto; }
+  .medical-document-header { flex-wrap: wrap; gap: 10px; }
+  .medical-document-hero, .medical-document-grid { grid-template-columns: minmax(0, 1fr); }
+  .medical-document-grid { gap: 10px; margin-top: 14px; }
+  .medical-document-notes { margin-top: 14px; }
+  .medical-document-contact { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+
+@media print {
+  .medical-document-page { width: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible; font-size: 10pt; }
+  .medical-document-header { padding: 12pt 14pt; }
+  .medical-document-content { padding: 14pt; }
+  .medical-document-hero { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 10pt; }
+  .medical-document-panel { padding: 10pt; }
+  .medical-document-meta h1 { font-size: 22pt; }
+  .medical-document-code-box img { width: min(100%, 48mm); }
+  .medical-document-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8pt; margin-top: 12pt; }
+  .medical-document-item { padding: 8pt; }
+  .medical-document-notes { margin-top: 12pt; padding: 9pt 10pt; }
+  .medical-document-notes, .medical-document-item, .medical-document-contact { break-inside: avoid; }
+  .medical-document-notes img { max-width: 100%; height: auto; }
+}

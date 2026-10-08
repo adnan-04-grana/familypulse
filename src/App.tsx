@@ -11,6 +11,7 @@ import QRCode from 'qrcode'
 import { gunzipSync, gzipSync, strFromU8, strToU8 } from 'fflate'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import medicalDocumentStyles from './medical-document.css?inline'
 import {
   blankPermissions, blankProfile, emptyStore, hashPassword, makeId, makeInviteCode,
   makeInvitePasscode, makeMedicalCode, makePasswordSalt, hashInviteCredentials, PASSWORD_HASH_ITERATIONS, readStore, saveStore,
@@ -19,6 +20,7 @@ import {
   type SafetyEvent,
 } from './store'
 import './App.css'
+import './medical-document.css'
 
 type PageKey = 'dashboard' | 'my-health' | 'family-members' | 'join-family' | 'member-profile' | 'emergency-center' | 'live-monitoring' | 'medical-information' | 'locations' | 'emergency-history' | 'wearable-device' | 'notifications' | 'privacy-permissions' | 'family-settings' | 'emergency-contacts' | 'account-settings'
 type GeoPoint = { latitude: number; longitude: number; accuracy: number; timestamp: number }
@@ -41,6 +43,7 @@ const SESSION_IDLE_LIMIT = 15 * 60 * 1000
 type MedicalRescuePayload = {
   i: string
   n: string
+  e?: string
   dob: string
   bt: string
   a: string
@@ -57,6 +60,7 @@ function buildMedicalPayload(account: Account): MedicalRescuePayload {
   return {
     i: account.medicalId,
     n: account.name,
+    e: account.email,
     dob: account.profile.dateOfBirth || 'Not provided',
     bt: account.profile.bloodType || 'Not provided',
     a: account.profile.allergies || 'Not provided',
@@ -65,7 +69,7 @@ function buildMedicalPayload(account: Account): MedicalRescuePayload {
     doc: account.profile.doctor || 'Not provided',
     ins: account.profile.insurance || 'Not provided',
     en: account.profile.emergencyNumber || 'Not provided',
-    notes: account.profile.notes || 'Not provided',
+    notes: account.profile.notes || 'No additional medical notes have been saved.',
     ec: account.contacts.map(({ name, relationship, phone }) => [name, relationship, phone] as [string, string, string]),
   }
 }
@@ -107,6 +111,35 @@ function readMedicalRescuePayload(): MedicalRescuePayload | null {
 
 function escapeHtml(value: string) {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;')
+}
+
+function generateMedicalCard(rescueUrl: string, medicalId: string) {
+  return Promise.all([
+    QRCode.toDataURL(rescueUrl, {
+      width: 280,
+      margin: 4,
+      color: { dark: '#173b33', light: '#ffffff' },
+    }),
+    new Promise<string>((resolve, reject) => {
+      const canvas = document.createElement('canvas')
+      try {
+        JsBarcode(canvas, medicalId, {
+          format: 'CODE128',
+          width: 2,
+          height: 94,
+          displayValue: true,
+          fontSize: 16,
+          margin: 12,
+          background: '#ffffff',
+          lineColor: '#173b33',
+          textMargin: 8,
+        })
+        resolve(canvas.toDataURL('image/png'))
+      } catch (error) {
+        reject(error)
+      }
+    }),
+  ]).then(([qr, barcode]) => ({ qr, barcode }))
 }
 
 async function lookupStreetName(point: GeoPoint) {
@@ -718,29 +751,8 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
     let cancelled = false
     const renderCards = async () => {
       try {
-        const [qr, barcode] = await Promise.all([
-          QRCode.toDataURL(rescueUrl.toString(), {
-            width: 280,
-            margin: 4,
-            color: { dark: '#173b33', light: '#ffffff' },
-          }),
-          new Promise<string>((resolve) => {
-            const canvas = document.createElement('canvas')
-            JsBarcode(canvas, profile.medicalId, {
-              format: 'CODE128',
-              width: 2,
-              height: 94,
-              displayValue: true,
-              fontSize: 16,
-              margin: 12,
-              background: '#ffffff',
-              lineColor: '#173b33',
-              textMargin: 8,
-            })
-            resolve(canvas.toDataURL('image/png'))
-          }),
-        ])
-        if (!cancelled) setMedicalCard({ qr, barcode })
+        const card = await generateMedicalCard(rescueUrl.toString(), profile.medicalId)
+        if (!cancelled) setMedicalCard(card)
       } catch {
         if (!cancelled) setMedicalCard({ qr: '', barcode: '' })
       }
