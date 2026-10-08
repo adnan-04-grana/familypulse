@@ -8,6 +8,7 @@ import {
 import { divIcon } from 'leaflet'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
+import LZString from 'lz-string'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -51,6 +52,23 @@ function buildMedicalPayload(account: Account) {
     emergencyNumber: account.profile.emergencyNumber || 'Not provided',
     notes: account.profile.notes || 'Not provided',
     emergencyContacts: account.contacts.map(({ name, relationship, phone }) => ({ name, relationship, phone })),
+  }
+}
+
+type MedicalRescuePayload = ReturnType<typeof buildMedicalPayload>
+
+function readMedicalRescuePayload(): MedicalRescuePayload | null {
+  const prefix = '#rescue='
+  if (!window.location.hash.startsWith(prefix)) return null
+  try {
+    const encoded = decodeURIComponent(window.location.hash.slice(prefix.length))
+    const serialized = LZString.decompressFromEncodedURIComponent(encoded)
+    if (!serialized) return null
+    const payload: unknown = JSON.parse(serialized)
+    if (!payload || typeof payload !== 'object' || typeof (payload as MedicalRescuePayload).name !== 'string') return null
+    return payload as MedicalRescuePayload
+  } catch {
+    return null
   }
 }
 
@@ -507,6 +525,9 @@ function App() {
 
   if (!account) return <AuthScreen mode={authMode} setMode={(mode) => { setAuthMode(mode); setAuthError('') }} error={authError} onSubmit={handleAuth} />
 
+  const rescueProfile = readMedicalRescuePayload()
+  if (rescueProfile) return <MedicalRescuePage profile={rescueProfile} />
+
   return <main className="app-shell">
     <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-brand"><span className="brand-mark"><HeartPulse size={18} /></span><span>family<span className="brand-pulse">pulse</span></span><button className="mobile-close icon-button" aria-label="Close menu" onClick={() => setMobileNavOpen(false)}><X size={18} /></button></div>
@@ -650,6 +671,9 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
   const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
   const canEdit = ownProfile
   const medicalPayload = JSON.stringify(buildMedicalPayload(profile))
+  const rescueUrl = new URL(window.location.href)
+  rescueUrl.search = ''
+  rescueUrl.hash = `rescue=${encodeURIComponent(LZString.compressToEncodedURIComponent(medicalPayload))}`
 
   useEffect(() => {
     if (!ownProfile) {
@@ -660,7 +684,7 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
     const renderCards = async () => {
       try {
         const [qr, barcode] = await Promise.all([
-          QRCode.toDataURL(medicalPayload, {
+          QRCode.toDataURL(rescueUrl.toString(), {
             width: 280,
             margin: 4,
             color: { dark: '#173b33', light: '#ffffff' },
@@ -797,6 +821,34 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
     {editing ? <div className="profile-form-grid">{fields.map((field) => <label className={field.type === 'textarea' ? 'wide-field' : ''} key={field.key}>{field.label}{field.type === 'select' ? <select value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)}>{field.options?.map((option) => <option key={option} value={option}>{option || 'Select blood type'}</option>)}</select> : field.type === 'textarea' ? <textarea rows={3} maxLength={2000} value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)} placeholder="Add only what you choose to store"/> : <input type={field.type ?? 'text'} maxLength={field.type === 'date' ? undefined : 120} value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)} placeholder="Not added"/>}</label>)}</div> : <div className="saved-profile-grid">{fields.map((field) => { const visible = ownProfile || (field.access === 'basic' ? canSeeBasic : field.access === 'medical' ? canSeePrivate : profile.permissions.emergency); return <div className="saved-profile-item" key={field.key}><span>{field.label}</span><strong>{!visible ? 'Not shared' : profile.profile[field.key] || 'Not provided'}</strong></div> })}</div>}
     {ownProfile && editing && <div className="profile-form-actions"><span className="inline-note"><LockKeyhole size={14}/>Changes save to your FamilyPulse profile.</span><div><button className="outline-button" onClick={cancel}>Cancel</button><button className="primary-button" onClick={save}><Save size={15}/>Save medical information</button></div></div>}
   </section>
+}
+
+function MedicalRescuePage({ profile }: { profile: MedicalRescuePayload }) {
+  const details = [
+    ['Date of birth', profile.dateOfBirth],
+    ['Blood type', profile.bloodType],
+    ['Allergies', profile.allergies],
+    ['Medical conditions', profile.conditions],
+    ['Medications', profile.medications],
+    ['Doctor or clinic', profile.doctor],
+    ['Insurance', profile.insurance],
+    ['Emergency number', profile.emergencyNumber],
+    ['Medical notes', profile.notes],
+  ]
+
+  return <main className="medical-rescue-page">
+    <header className="medical-rescue-header">
+      <div className="medical-rescue-brand"><span className="brand-mark"><HeartPulse size={18}/></span><span>family<span className="brand-pulse">pulse</span></span></div>
+      <span className="tag">RESCUE MEDICAL ID</span>
+    </header>
+    <div className="medical-rescue-alert"><AlertCircle size={19}/><div><strong>Emergency medical profile</strong><span>For urgent help, contact local emergency services.</span></div></div>
+    <section className="medical-rescue-identity"><span className="eyebrow">PERSON</span><h1>{profile.name}</h1><p>Medical ID <code>{profile.id}</code></p></section>
+    <section className="medical-rescue-details" aria-label="Medical information">
+      {details.map(([label, value]) => <div className="medical-rescue-detail" key={label}><span>{label}</span><strong>{value}</strong></div>)}
+    </section>
+    <section className="medical-rescue-contacts"><h2>Emergency contacts</h2>{profile.emergencyContacts.length ? <div>{profile.emergencyContacts.map((contact, index) => <article key={`${contact.phone}-${index}`}><strong>{contact.name}</strong><span>{contact.relationship}</span><a href={`tel:${contact.phone.replace(/[^+\d]/g, '')}`}>{contact.phone}</a></article>)}</div> : <p>No emergency contacts provided.</p>}</section>
+    <footer className="medical-rescue-footer">FamilyPulse · Information shared by the profile owner</footer>
+  </main>
 }
 
 function MapFollow({ point }: { point?: GeoPoint }) {
