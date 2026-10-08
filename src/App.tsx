@@ -899,15 +899,15 @@ function MedicalRescuePage({ profile }: { profile: MedicalRescuePayload }) {
   return <main className="medical-rescue-page">
     <header className="medical-rescue-header">
       <div className="medical-rescue-brand"><span className="brand-mark"><HeartPulse size={18}/></span><span>family<span className="brand-pulse">pulse</span></span></div>
-      <span className="tag">RESCUE MEDICAL ID</span>
+      <span className="tag">SCANNED PATIENT RECORD</span>
     </header>
     <div className="medical-rescue-alert"><AlertCircle size={19}/><div><strong>Emergency medical profile</strong><span>For urgent help, contact local emergency services.</span></div></div>
-    <section className="medical-rescue-identity"><span className="eyebrow">PERSON</span><h1>{profile.n}</h1><p>Medical ID <code>{profile.i}</code></p></section>
+    <section className="medical-rescue-identity"><span className="eyebrow">PATIENT</span><h1>{profile.n}</h1><p>Medical ID <code>{profile.i}</code></p></section>
     <section className="medical-rescue-details" aria-label="Medical information">
       {details.map(([label, value]) => <div className="medical-rescue-detail" key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </section>
     <section className="medical-rescue-contacts"><h2>Emergency contacts</h2>{profile.ec.length ? <div>{profile.ec.map(([name, relationship, phone], index) => <article key={`${phone}-${index}`}><strong>{name}</strong><span>{relationship}</span><a href={`tel:${phone.replace(/[^+\d]/g, '')}`}>{phone}</a></article>)}</div> : <p>No emergency contacts provided.</p>}</section>
-    <footer className="medical-rescue-footer">FamilyPulse · Information shared by the profile owner</footer>
+    <footer className="medical-rescue-footer">END OF PATIENT RECORD / FAMILY PULSE</footer>
   </main>
 }
 
