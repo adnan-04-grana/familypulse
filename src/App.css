@@ -272,36 +272,41 @@ button { border: 0; cursor: pointer; }
 .medical-identity-card p { margin: 12px 0 0; color: #768680; font-size: 9px; line-height: 1.6; }
 .medical-identity-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .medical-identity-actions .outline-button { min-height: 31px; padding-inline: 10px; }
-.medical-rescue-page { width: min(calc(100% - 40px), 820px); min-height: 100vh; margin: 0 auto; padding: 24px 0 40px; color: #273b42; }
-.medical-rescue-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid #dfe9e4; }
-.medical-rescue-brand { display: flex; align-items: center; gap: 9px; color: #1c2f39; font-size: 17px; font-weight: 700; }
-.medical-rescue-alert { display: flex; align-items: flex-start; gap: 10px; margin: 22px 0 18px; padding: 12px 14px; color: #624f49; background: #f8f1ee; border-left: 3px solid #b5685c; }
+.medical-rescue-page { width: min(calc(100% - 32px), 760px); margin: 24px auto; padding: 24px clamp(18px, 4vw, 38px) 22px; color: #273b42; background: #fff; border: 1px solid #dce4df; border-top: 4px solid #285b49; box-shadow: 0 12px 34px rgba(25, 42, 54, .08); }
+.medical-rescue-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px dashed #cdd8d1; }
+.medical-rescue-brand { display: flex; align-items: center; gap: 9px; color: #1c2f39; font-size: 14px; font-weight: 700; }
+.medical-rescue-header .tag { padding: 5px 8px; border: 1px solid #cbd9d0; border-radius: 2px; background: #fff; color: #285b49; font-family: ui-monospace, Consolas, monospace; font-size: 9px; letter-spacing: .7px; }
+.medical-rescue-alert { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0 14px; padding: 11px 12px; color: #624f49; background: #fbf6f3; border: 1px solid #eadbd5; border-left: 3px solid #b5685c; }
 .medical-rescue-alert svg { flex: 0 0 auto; color: #a9574a; }
 .medical-rescue-alert div { display: grid; gap: 3px; }
 .medical-rescue-alert strong { font-size: 12px; }
 .medical-rescue-alert span { font-size: 11px; line-height: 1.5; }
-.medical-rescue-identity { padding: 10px 0 18px; border-bottom: 1px solid #dfe9e4; }
+.medical-rescue-identity { padding: 10px 0 16px; border-bottom: 1px dashed #cdd8d1; }
 .medical-rescue-identity .eyebrow { margin-left: 0; }
-.medical-rescue-identity h1 { margin: 4px 0 7px; color: #1c2f39; font-size: 28px; font-weight: 650; }
+.medical-rescue-identity h1 { margin: 4px 0 7px; color: #1c2f39; font-size: clamp(24px, 5vw, 32px); font-weight: 700; overflow-wrap: anywhere; }
 .medical-rescue-identity p { margin: 0; color: #73827d; font-size: 11px; }
-.medical-rescue-identity code { color: #285b49; font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
-.medical-rescue-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; border-bottom: 1px solid #dfe9e4; }
-.medical-rescue-detail { display: grid; min-width: 0; gap: 5px; padding: 12px 0; border-bottom: 1px solid #edf0ee; }
-.medical-rescue-detail span { color: #788983; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.medical-rescue-identity code { color: #285b49; font-family: ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 700; }
+.medical-rescue-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; border-bottom: 1px dashed #cdd8d1; }
+.medical-rescue-detail { display: grid; min-width: 0; gap: 5px; padding: 11px 0; border-bottom: 1px dotted #e0e6e2; break-inside: avoid; }
+.medical-rescue-detail span { color: #788983; font-family: ui-monospace, Consolas, monospace; font-size: 9px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
 .medical-rescue-detail strong { color: #30453d; font-size: 13px; font-weight: 550; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.medical-rescue-contacts { padding: 20px 0 10px; }
-.medical-rescue-contacts h2 { margin: 0 0 8px; color: #1c2f39; font-size: 16px; }
-.medical-rescue-contacts > div { border-top: 1px solid #dfe9e4; }
-.medical-rescue-contacts article { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edf0ee; font-size: 12px; }
+.medical-rescue-contacts { padding: 18px 0 10px; }
+.medical-rescue-contacts h2 { margin: 0 0 8px; color: #1c2f39; font-size: 14px; letter-spacing: .3px; text-transform: uppercase; }
+.medical-rescue-contacts > div { border-top: 1px dashed #cdd8d1; }
+.medical-rescue-contacts article { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 12px; padding: 11px 0; border-bottom: 1px dotted #e0e6e2; font-size: 12px; break-inside: avoid; }
 .medical-rescue-contacts article strong { color: #30453d; }
 .medical-rescue-contacts article span { color: #788983; }
 .medical-rescue-contacts article a { color: #285b49; font-weight: 650; overflow-wrap: anywhere; }
 .medical-rescue-contacts > p,.medical-rescue-footer { color: #788983; font-size: 10px; line-height: 1.6; }
-.medical-rescue-footer { padding-top: 14px; border-top: 1px solid #dfe9e4; }
+.medical-rescue-footer { padding-top: 12px; border-top: 1px dashed #cdd8d1; font-family: ui-monospace, Consolas, monospace; font-size: 9px; letter-spacing: .3px; text-transform: uppercase; }
 @media (max-width: 620px) {
-	.medical-rescue-page { width: min(calc(100% - 32px), 820px); padding-top: 16px; }
+	.medical-rescue-page { width: calc(100% - 20px); margin: 10px auto; padding: 18px 16px; }
 	.medical-rescue-details { grid-template-columns: minmax(0, 1fr); }
 	.medical-rescue-contacts article { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+@media print {
+	.medical-rescue-page { width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; }
+	.medical-rescue-header,.medical-rescue-identity,.medical-rescue-details,.medical-rescue-contacts,.medical-rescue-footer { break-inside: avoid; }
 }
 .saved-profile-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 20px; padding: 3px 2px; }
 .saved-profile-item { display: flex; flex-direction: column; gap: 5px; min-height: 59px; padding: 10px 0; border-bottom: 1px solid #edf0ee; }
