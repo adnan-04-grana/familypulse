@@ -32,6 +32,7 @@ export type Account = {
   passwordHash: string
   passwordIterations?: number
   circleId: string
+  medicalId: string
   profile: MedicalProfile
   profileSaved?: boolean
   permissions: MemberPermissions
@@ -98,8 +99,12 @@ export function readStore(): LocalStore {
     const value: unknown = JSON.parse(raw)
     if (!value || typeof value !== 'object') return emptyStore()
     const store = value as Partial<LocalStore>
+    const accounts = Array.isArray(store.accounts) ? store.accounts : []
     return {
-      accounts: Array.isArray(store.accounts) ? store.accounts : [],
+      accounts: accounts.map((account) => ({
+        ...account,
+        medicalId: typeof account.medicalId === 'string' && account.medicalId.length === 32 ? account.medicalId : makeMedicalCode(),
+      })),
       circles: Array.isArray(store.circles) ? store.circles : [],
       invites: Array.isArray(store.invites) ? store.invites : [],
       events: Array.isArray(store.events) ? store.events : [],
@@ -136,6 +141,13 @@ export function makeInvitePasscode() {
   const bytes = new Uint8Array(4)
   crypto.getRandomValues(bytes)
   return String(((((bytes[0] * 256 + bytes[1]) * 256 + bytes[2]) * 256 + bytes[3]) >>> 0) % 1000000).padStart(6, '0')
+}
+
+export function makeMedicalCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = new Uint8Array(24)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('').slice(0, 32)
 }
 
 export function makePasswordSalt() {

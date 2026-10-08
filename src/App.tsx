@@ -6,6 +6,8 @@ import {
   Watch, X,
 } from 'lucide-react'
 import { divIcon } from 'leaflet'
+import JsBarcode from 'jsbarcode'
+import QRCode from 'qrcode'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -34,6 +36,30 @@ function isInviteActive(invite: CircleInvite, now = timestampNow()) {
 }
 const SESSION_ACTIVITY_KEY = 'familypulse-session-last-active'
 const SESSION_IDLE_LIMIT = 15 * 60 * 1000
+
+function buildMedicalPayload(account: Account) {
+  return {
+    medicalId: account.medicalId,
+    fullName: account.name,
+    email: account.email,
+    dateOfBirth: account.profile.dateOfBirth || 'Not provided',
+    bloodType: account.profile.bloodType || 'Not provided',
+    allergies: account.profile.allergies || 'Not provided',
+    conditions: account.profile.conditions || 'Not provided',
+    medications: account.profile.medications || 'Not provided',
+    doctor: account.profile.doctor || 'Not provided',
+    insurance: account.profile.insurance || 'Not provided',
+    emergencyNumber: account.profile.emergencyNumber || 'Not provided',
+    notes: account.profile.notes || 'Not provided',
+    permissions: account.permissions,
+    contacts: account.contacts,
+    generatedAt: new Date().toISOString(),
+  }
+}
+
+function escapeHtml(value: string) {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;')
+}
 
 async function lookupStreetName(point: GeoPoint) {
   const query = new URLSearchParams({ format: 'jsonv2', lat: String(point.latitude), lon: String(point.longitude), zoom: '18', addressdetails: '1' })
@@ -328,7 +354,7 @@ function App() {
       const circleId = makeId('circle')
       const salt = makePasswordSalt()
       const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId, profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
+      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId, medicalId: makeId('med').replace('med_', '').slice(0, 32).toUpperCase() || 'FAM1LYPULSE0000000000000000', profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
       const newCircle: FamilyCircle = { id: circleId, name: `${name.split(' ')[0]}'s Family Circle`, ownerId: id, memberIds: [id], escalationMinutes: 5 }
       updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: [...currentStore.circles, newCircle] }))
       sessionStorage.setItem('familypulse-session', id)
@@ -348,7 +374,7 @@ function App() {
       const id = makeId('person')
       const salt = makePasswordSalt()
       const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId: invite.circleId, profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
+      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId: invite.circleId, medicalId: makeId('med').replace('med_', '').slice(0, 32).toUpperCase() || 'FAM1LYPULSE0000000000000000', profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
       updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: currentStore.circles.map((item) => item.id === invite.circleId ? { ...item, memberIds: [...item.memberIds, id] } : item), invites: currentStore.invites.filter((item) => item !== invite) }))
       sessionStorage.setItem('familypulse-session', id)
       sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(timestampNow()))
@@ -423,7 +449,7 @@ function App() {
   }
   function saveProfile(profile: Account['profile']) {
     if (!account) return
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, profile, profileSaved: true } : item) }))
+    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, profile, profileSaved: true, medicalId: item.medicalId || 'FAM1LYPULSE0000000000000000' } : item) }))
   }
   function updatePermission(field: keyof MemberPermissions, checked: boolean) {
     if (!account) return
@@ -624,7 +650,49 @@ function MyHealthOverview({ account, onOpenMedical }: { account: Account; onOpen
 function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, fields, onSave }: { profile: Account; ownProfile: boolean; canSeeBasic: boolean; canSeePrivate: boolean; fields: ProfileField[]; onSave: (profile: Account['profile']) => void }) {
   const [draft, setDraft] = useState(profile.profile)
   const [editing, setEditing] = useState(ownProfile && !profile.profileSaved)
+  const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
   const canEdit = ownProfile
+  const medicalPayload = JSON.stringify(buildMedicalPayload(profile), null, 2)
+
+  useEffect(() => {
+    if (!ownProfile) {
+      setMedicalCard(null)
+      return
+    }
+    let cancelled = false
+    const renderCards = async () => {
+      try {
+        const [qr, barcode] = await Promise.all([
+          QRCode.toDataURL(medicalPayload, {
+            width: 220,
+            margin: 1,
+            color: { dark: '#173b33', light: '#ffffff' },
+          }),
+          new Promise<string>((resolve) => {
+            const canvas = document.createElement('canvas')
+            JsBarcode(canvas, profile.medicalId, {
+              format: 'CODE128',
+              width: 2,
+              height: 94,
+              displayValue: true,
+              fontSize: 16,
+              margin: 12,
+              background: '#ffffff',
+              lineColor: '#173b33',
+              textMargin: 8,
+            })
+            resolve(canvas.toDataURL('image/png'))
+          }),
+        ])
+        if (!cancelled) setMedicalCard({ qr, barcode })
+      } catch {
+        if (!cancelled) setMedicalCard({ qr: '', barcode: '' })
+      }
+    }
+    void renderCards()
+    return () => { cancelled = true }
+  }, [medicalPayload, ownProfile, profile.medicalId])
+
   function updateField(field: keyof Account['profile'], value: string) {
     setDraft((current) => ({ ...current, [field]: value }))
   }
@@ -636,8 +704,87 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
     setDraft(profile.profile)
     setEditing(false)
   }
+
+  function openMedicalPdf() {
+    if (!medicalCard) return
+    const printWindow = window.open('', '_blank', 'width=980,height=1200')
+    if (!printWindow) return
+    const html = `
+      <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>FamilyPulse Medical ID</title>
+        <style>
+          :root { --navy: #1c2f39; --green: #285b49; --soft: #edf5f0; --paper: #ffffff; --line: #dfe9e4; --muted: #71828a; }
+          * { box-sizing: border-box; }
+          body { margin: 0; font-family: Arial, sans-serif; background: #f5f7f6; color: var(--navy); }
+          .page { width: 100%; max-width: 860px; margin: 28px auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 14px 36px rgba(13, 25, 23, 0.08); }
+          .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(180deg, #edf6f0 0%, #ffffff 100%); padding: 24px 28px; border-bottom: 1px solid var(--line); }
+          .brand { display: flex; align-items: center; gap: 11px; font-size: 28px; font-weight: 700; color: var(--navy); }
+          .brand-mark { display: inline-grid; place-items: center; width: 38px; height: 38px; margin-right: 2px; border-radius: 10px; background: #e2f0e8; color: var(--green); }
+          .tag { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 999px; background: #edf5f0; color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: .7px; }
+          .content { padding: 28px; }
+          .hero { display: grid; grid-template-columns: 1.2fr .8fr; gap: 22px; }
+          .panel { border: 1px solid var(--line); border-radius: 10px; padding: 18px; background: #fff; }
+          .meta { display: grid; gap: 10px; }
+          .meta strong { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+          .meta h1 { margin: 0; font-size: 30px; color: var(--navy); }
+          .meta p { margin: 0; color: #58706a; line-height: 1.6; }
+          .code-box { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+          .code-box img { max-width: 100%; }
+          .code-value { font-family: 'Consolas', monospace; letter-spacing: 2px; font-size: 18px; font-weight: 700; color: var(--green); }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
+          .item { border: 1px solid var(--line); border-radius: 8px; padding: 13px 14px; }
+          .item span { display: block; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+          .item strong { display: block; color: var(--navy); font-size: 15px; line-height: 1.5; }
+          .notes { margin-top: 22px; border: 1px solid var(--line); border-radius: 8px; padding: 15px 16px; background: #f9fbfa; }
+          .notes h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+          .notes p { margin: 0; color: var(--navy); line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="header">
+            <div class="brand"><span class="brand-mark">❤</span>family<span style="color: var(--green);">pulse</span></div>
+            <span class="tag">MEDICAL ID</span>
+          </div>
+          <div class="content">
+            <div class="hero">
+              <div class="panel meta">
+                <strong>Emergency profile</strong>
+                <h1>${escapeHtml(profile.name)}</h1>
+                <p><strong>Email:</strong> ${escapeHtml(profile.email)}<br/><strong>Medical ID:</strong> ${escapeHtml(profile.medicalId)}</p>
+              </div>
+              <div class="panel code-box">
+                <img src="${medicalCard.qr}" alt="QR code" />
+                <div class="code-value">${escapeHtml(profile.medicalId)}</div>
+              </div>
+            </div>
+            <div class="grid">
+              <div class="item"><span>Date of birth</span><strong>${escapeHtml(profile.profile.dateOfBirth || 'Not provided')}</strong></div>
+              <div class="item"><span>Blood type</span><strong>${escapeHtml(profile.profile.bloodType || 'Not provided')}</strong></div>
+              <div class="item"><span>Allergies</span><strong>${escapeHtml(profile.profile.allergies || 'Not provided')}</strong></div>
+              <div class="item"><span>Conditions</span><strong>${escapeHtml(profile.profile.conditions || 'Not provided')}</strong></div>
+              <div class="item"><span>Medications</span><strong>${escapeHtml(profile.profile.medications || 'Not provided')}</strong></div>
+              <div class="item"><span>Doctor / clinic</span><strong>${escapeHtml(profile.profile.doctor || 'Not provided')}</strong></div>
+              <div class="item"><span>Insurance</span><strong>${escapeHtml(profile.profile.insurance || 'Not provided')}</strong></div>
+              <div class="item"><span>Emergency number</span><strong>${escapeHtml(profile.profile.emergencyNumber || 'Not provided')}</strong></div>
+            </div>
+            <div class="notes"><h3>Barcode</h3><img src="${medicalCard.barcode}" alt="Barcode" style="max-width: 100%; height: auto; display: block; margin-top: 8px;" /></div>
+            <div class="notes"><h3>Medical notes</h3><p>${escapeHtml(profile.profile.notes || 'No additional medical notes have been saved.')}</p></div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    setTimeout(() => { try { printWindow.focus(); printWindow.print() } catch { /* no-op */ } }, 300)
+  }
+
   return <section className={`content-section medical-profile-page ${editing ? 'is-editing' : 'is-saved'}`}>
     <div className="profile-page-heading"><div className="privacy-callout"><ShieldCheck size={20}/><div><strong>{ownProfile ? editing ? 'Edit your medical information.' : 'Your medical information is saved.' : `Information shared by ${profile.name}.`}</strong><span>{ownProfile ? editing ? 'Changes stay as a draft until you press Save.' : 'This read-only view shows the details currently saved in your browser.' : 'Only categories this member chose to share are visible.'}</span></div></div>{canEdit && !editing && <button className="outline-button" onClick={() => setEditing(true)}>Edit profile<Pencil size={14}/></button>}</div>
+    {ownProfile && ((medicalCard && medicalCard.qr && medicalCard.barcode) || editing) && <div className="medical-identity-card"><div className="medical-identity-header"><div><span className="eyebrow">PERSONALI MEDICAL ID</span><h3>{profile.medicalId}</h3></div><button className="outline-button" onClick={openMedicalPdf}>Open PDF</button></div><div className="medical-identity-body"><div className="medical-identity-qr"><img src={medicalCard?.qr || ''} alt="Medical QR code" /></div><div className="medical-identity-code"><span>Unique medical ID</span><strong>{profile.medicalId}</strong><img src={medicalCard?.barcode || ''} alt="Medical barcode" /></div></div><p>Created once for this account and updated automatically when your medical information changes.</p></div>}
     {editing ? <div className="profile-form-grid">{fields.map((field) => <label className={field.type === 'textarea' ? 'wide-field' : ''} key={field.key}>{field.label}{field.type === 'select' ? <select value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)}>{field.options?.map((option) => <option key={option} value={option}>{option || 'Select blood type'}</option>)}</select> : field.type === 'textarea' ? <textarea rows={3} maxLength={2000} value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)} placeholder="Add only what you choose to store"/> : <input type={field.type ?? 'text'} maxLength={field.type === 'date' ? undefined : 120} value={draft[field.key]} onChange={(event) => updateField(field.key, event.target.value)} placeholder="Not added"/>}</label>)}</div> : <div className="saved-profile-grid">{fields.map((field) => { const visible = ownProfile || (field.access === 'basic' ? canSeeBasic : field.access === 'medical' ? canSeePrivate : profile.permissions.emergency); return <div className="saved-profile-item" key={field.key}><span>{field.label}</span><strong>{!visible ? 'Not shared' : profile.profile[field.key] || 'Not provided'}</strong></div> })}</div>}
     {ownProfile && editing && <div className="profile-form-actions"><span className="inline-note"><LockKeyhole size={14}/>Changes save to your FamilyPulse profile.</span><div><button className="outline-button" onClick={cancel}>Cancel</button><button className="primary-button" onClick={save}><Save size={15}/>Save medical information</button></div></div>}
   </section>
