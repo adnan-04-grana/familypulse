@@ -53,7 +53,6 @@ function buildMedicalPayload(account: Account) {
     notes: account.profile.notes || 'Not provided',
     permissions: account.permissions,
     contacts: account.contacts,
-    generatedAt: new Date().toISOString(),
   }
 }
 
