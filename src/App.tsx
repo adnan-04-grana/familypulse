@@ -795,88 +795,39 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>FamilyPulse Medical ID</title>
-        <style>
-          :root { --navy: #1c2f39; --green: #285b49; --soft: #edf5f0; --paper: #ffffff; --line: #dfe9e4; --muted: #71828a; }
-          * { box-sizing: border-box; }
-          html { font-size: clamp(14px, 1.6vw, 16px); }
-          body { margin: 0; font-family: Arial, sans-serif; background: #f5f7f6; color: var(--navy); font-size: 1rem; }
-          .page { width: min(calc(100% - 32px), 860px); margin: 28px auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 14px 36px rgba(13, 25, 23, 0.08); }
-          .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(180deg, #edf6f0 0%, #ffffff 100%); padding: clamp(16px, 3vw, 24px) clamp(16px, 3.3vw, 28px); border-bottom: 1px solid var(--line); }
-          .brand { display: flex; align-items: center; gap: 11px; font-size: clamp(1.25rem, 3vw, 1.75rem); font-weight: 700; color: var(--navy); }
-          .brand-mark { display: inline-grid; place-items: center; flex: 0 0 auto; width: 2.375rem; height: 2.375rem; margin-right: 2px; border-radius: 10px; background: #e2f0e8; color: var(--green); }
-          .tag { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 999px; background: #edf5f0; color: var(--green); font-size: .6875rem; font-weight: 700; letter-spacing: .7px; }
-          .content { padding: clamp(16px, 3.3vw, 28px); }
-          .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: clamp(12px, 2.5vw, 22px); }
-          .panel { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: clamp(14px, 2.2vw, 18px); background: #fff; }
-          .meta { display: grid; gap: 10px; }
-          .meta strong { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
-          .meta h1 { margin: 0; font-size: clamp(1.5rem, 3.5vw, 1.875rem); overflow-wrap: anywhere; color: var(--navy); }
-          .meta p { margin: 0; color: #58706a; line-height: 1.6; overflow-wrap: anywhere; }
-          .code-box { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-          .code-box img { display: block; width: min(100%, 220px); height: auto; }
-          .code-value { max-width: 100%; overflow-wrap: anywhere; font-family: 'Consolas', monospace; letter-spacing: .08em; font-size: clamp(.875rem, 2vw, 1.125rem); font-weight: 700; color: var(--green); }
-          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 2vw, 18px); margin-top: 22px; }
-          .item { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 13px 14px; break-inside: avoid; }
-          .item span { display: block; font-size: .625rem; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
-          .item strong { display: block; color: var(--navy); font-size: clamp(.875rem, 1.7vw, .9375rem); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
-          .notes { margin-top: 22px; border: 1px solid var(--line); border-radius: 8px; padding: 15px 16px; background: #f9fbfa; break-inside: avoid; }
-          .notes h3 { margin: 0 0 8px; font-size: .75rem; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
-          .notes p { margin: 0; color: var(--navy); line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
-          @media (max-width: 600px) {
-            .page { width: calc(100% - 24px); margin: 12px auto; }
-            .header { flex-wrap: wrap; gap: 10px; }
-            .hero, .grid { grid-template-columns: minmax(0, 1fr); }
-            .grid { gap: 10px; margin-top: 14px; }
-            .notes { margin-top: 14px; }
-          }
-          @page { size: auto; margin: 12mm; }
-          @media print {
-            html { font-size: 10pt; }
-            body { background: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-            .page { width: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
-            .header { padding: 12pt 14pt; }
-            .content { padding: 14pt; }
-            .hero { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 10pt; }
-            .panel { padding: 10pt; }
-            .meta h1 { font-size: 22pt; }
-            .code-box img { width: min(100%, 48mm); }
-            .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8pt; margin-top: 12pt; }
-            .item { padding: 8pt; }
-            .notes { margin-top: 12pt; padding: 9pt 10pt; }
-            .notes img { max-width: 100%; height: auto; }
-          }
-        </style>
+        <style>${medicalDocumentStyles}\n@page { size: auto; margin: 12mm; }</style>
       </head>
       <body>
-        <div class="page">
-          <div class="header">
-            <div class="brand"><span class="brand-mark">❤</span>family<span style="color: var(--green);">pulse</span></div>
-            <span class="tag">MEDICAL ID</span>
+        <div class="medical-document-page">
+          <div class="medical-document-header">
+            <div class="medical-document-brand"><span class="medical-document-brand-mark">❤</span>family<span style="color: #285b49;">pulse</span></div>
+            <span class="medical-document-tag">MEDICAL ID</span>
           </div>
-          <div class="content">
-            <div class="hero">
-              <div class="panel meta">
+          <div class="medical-document-content">
+            <div class="medical-document-hero">
+              <div class="medical-document-panel medical-document-meta">
                 <strong>Emergency profile</strong>
                 <h1>${escapeHtml(profile.name)}</h1>
                 <p><strong>Email:</strong> ${escapeHtml(profile.email)}<br/><strong>Medical ID:</strong> ${escapeHtml(profile.medicalId)}</p>
               </div>
-              <div class="panel code-box">
+              <div class="medical-document-panel medical-document-code-box">
                 <img src="${medicalCard.qr}" alt="QR code" />
-                <div class="code-value">${escapeHtml(profile.medicalId)}</div>
+                <div class="medical-document-code-value">${escapeHtml(profile.medicalId)}</div>
               </div>
             </div>
-            <div class="grid">
-              <div class="item"><span>Date of birth</span><strong>${escapeHtml(profile.profile.dateOfBirth || 'Not provided')}</strong></div>
-              <div class="item"><span>Blood type</span><strong>${escapeHtml(profile.profile.bloodType || 'Not provided')}</strong></div>
-              <div class="item"><span>Allergies</span><strong>${escapeHtml(profile.profile.allergies || 'Not provided')}</strong></div>
-              <div class="item"><span>Conditions</span><strong>${escapeHtml(profile.profile.conditions || 'Not provided')}</strong></div>
-              <div class="item"><span>Medications</span><strong>${escapeHtml(profile.profile.medications || 'Not provided')}</strong></div>
-              <div class="item"><span>Doctor / clinic</span><strong>${escapeHtml(profile.profile.doctor || 'Not provided')}</strong></div>
-              <div class="item"><span>Insurance</span><strong>${escapeHtml(profile.profile.insurance || 'Not provided')}</strong></div>
-              <div class="item"><span>Emergency number</span><strong>${escapeHtml(profile.profile.emergencyNumber || 'Not provided')}</strong></div>
+            <div class="medical-document-grid">
+              <div class="medical-document-item"><span>Date of birth</span><strong>${escapeHtml(profile.profile.dateOfBirth || 'Not provided')}</strong></div>
+              <div class="medical-document-item"><span>Blood type</span><strong>${escapeHtml(profile.profile.bloodType || 'Not provided')}</strong></div>
+              <div class="medical-document-item"><span>Allergies</span><strong>${escapeHtml(profile.profile.allergies || 'Not provided')}</strong></div>
+              <div class="medical-document-item"><span>Conditions</span><strong>${escapeHtml(profile.profile.conditions || 'Not provided')}</strong></div>
+              <div class="medical-document-item"><span>Medications</span><strong>${escapeHtml(profile.profile.medications || 'Not provided')}</strong></div>
+              <div class="medical-document-item"><span>Doctor / clinic</span><strong>${escapeHtml(profile.profile.doctor || 'Not provided')}</strong></div>
+              <div class="medical-document-item"><span>Insurance</span><strong>${escapeHtml(profile.profile.insurance || 'Not provided')}</strong></div>
+              <div class="medical-document-item"><span>Emergency number</span><strong>${escapeHtml(profile.profile.emergencyNumber || 'Not provided')}</strong></div>
             </div>
-            <div class="notes"><h3>Barcode</h3><img src="${medicalCard.barcode}" alt="Barcode" style="max-width: 100%; height: auto; display: block; margin-top: 8px;" /></div>
-            <div class="notes"><h3>Medical notes</h3><p>${escapeHtml(profile.profile.notes || 'No additional medical notes have been saved.')}</p></div>
+            <div class="medical-document-notes"><h2>Emergency contacts</h2>${profile.contacts.length ? `<div class="medical-document-contact-list">${profile.contacts.map((contact) => `<div class="medical-document-contact"><strong>${escapeHtml(contact.name)}</strong><span>${escapeHtml(contact.relationship)}</span><a href="tel:${contact.phone.replace(/[^+\d]/g, '')}">${escapeHtml(contact.phone)}</a></div>`).join('')}</div>` : '<p>No emergency contacts have been saved.</p>'}</div>
+            <div class="medical-document-notes"><h2>Barcode</h2><img class="medical-document-barcode" src="${medicalCard.barcode}" alt="Barcode" /></div>
+            <div class="medical-document-notes"><h2>Medical notes</h2><p>${escapeHtml(profile.profile.notes || 'No additional medical notes have been saved.')}</p></div>
           </div>
         </div>
       </body>
@@ -896,6 +847,7 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
 }
 
 function MedicalRescuePage({ profile }: { profile: MedicalRescuePayload }) {
+  const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
   const details = [
     ['Date of birth', profile.dob],
     ['Blood type', profile.bt],
@@ -908,18 +860,44 @@ function MedicalRescuePage({ profile }: { profile: MedicalRescuePayload }) {
     ['Medical notes', profile.notes],
   ]
 
-  return <main className="medical-rescue-page">
-    <header className="medical-rescue-header">
-      <div className="medical-rescue-brand"><span className="brand-mark"><HeartPulse size={18}/></span><span>family<span className="brand-pulse">pulse</span></span></div>
-      <span className="tag">SCANNED PATIENT RECORD</span>
+  useEffect(() => {
+    let cancelled = false
+    void generateMedicalCard(window.location.href, profile.i)
+      .then((card) => { if (!cancelled) setMedicalCard(card) })
+      .catch(() => { if (!cancelled) setMedicalCard(null) })
+    return () => { cancelled = true }
+  }, [profile.i])
+
+  return <main className="medical-document-page">
+    <header className="medical-document-header">
+      <div className="medical-document-brand"><span className="medical-document-brand-mark">❤</span>family<span style={{ color: '#285b49' }}>pulse</span></div>
+      <span className="medical-document-tag">MEDICAL ID</span>
     </header>
-    <div className="medical-rescue-alert"><AlertCircle size={19}/><div><strong>Emergency medical profile</strong><span>For urgent help, contact local emergency services.</span></div></div>
-    <section className="medical-rescue-identity"><span className="eyebrow">PATIENT</span><h1>{profile.n}</h1><p>Medical ID <code>{profile.i}</code></p></section>
-    <section className="medical-rescue-details" aria-label="Medical information">
-      {details.map(([label, value]) => <div className="medical-rescue-detail" key={label}><span>{label}</span><strong>{value}</strong></div>)}
-    </section>
-    <section className="medical-rescue-contacts"><h2>Emergency contacts</h2>{profile.ec.length ? <div>{profile.ec.map(([name, relationship, phone], index) => <article key={`${phone}-${index}`}><strong>{name}</strong><span>{relationship}</span><a href={`tel:${phone.replace(/[^+\d]/g, '')}`}>{phone}</a></article>)}</div> : <p>No emergency contacts provided.</p>}</section>
-    <footer className="medical-rescue-footer">END OF PATIENT RECORD / FAMILY PULSE</footer>
+    <div className="medical-document-content">
+      <div className="medical-document-hero">
+        <section className="medical-document-panel medical-document-meta">
+          <strong>Emergency profile</strong>
+          <h1>{profile.n}</h1>
+          <p><strong>Email:</strong> {profile.e || 'Not provided'}<br/><strong>Medical ID:</strong> {profile.i}</p>
+        </section>
+        <section className="medical-document-panel medical-document-code-box">
+          {medicalCard && <img src={medicalCard.qr} alt="QR code" />}
+          <div className="medical-document-code-value">{profile.i}</div>
+        </section>
+      </div>
+      <div className="medical-document-grid">
+        {details.slice(0, 8).map(([label, value]) => <div className="medical-document-item" key={label}><span>{label}</span><strong>{value}</strong></div>)}
+      </div>
+      <section className="medical-document-notes">
+        <h2>Emergency contacts</h2>
+        {profile.ec.length ? <div className="medical-document-contact-list">{profile.ec.map(([name, relationship, phone], index) => <div className="medical-document-contact" key={`${phone}-${index}`}><strong>{name}</strong><span>{relationship}</span><a href={`tel:${phone.replace(/[^+\d]/g, '')}`}>{phone}</a></div>)}</div> : <p>No emergency contacts have been saved.</p>}
+      </section>
+      <section className="medical-document-notes">
+        <h2>Barcode</h2>
+        {medicalCard && <img className="medical-document-barcode" src={medicalCard.barcode} alt="Barcode" />}
+      </section>
+      <section className="medical-document-notes"><h2>Medical notes</h2><p>{profile.notes}</p></section>
+    </div>
   </main>
 }
 
