@@ -523,10 +523,9 @@ function App() {
     notify('Local data deleted.')
   }
 
-  if (!account) return <AuthScreen mode={authMode} setMode={(mode) => { setAuthMode(mode); setAuthError('') }} error={authError} onSubmit={handleAuth} />
-
   const rescueProfile = readMedicalRescuePayload()
   if (rescueProfile) return <MedicalRescuePage profile={rescueProfile} />
+  if (!account) return <AuthScreen mode={authMode} setMode={(mode) => { setAuthMode(mode); setAuthError('') }} error={authError} onSubmit={handleAuth} />
 
   return <main className="app-shell">
     <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
