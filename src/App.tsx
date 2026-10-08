@@ -810,18 +810,6 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
     setEditing(false)
   }
 
-  function downloadDataAsset(format: 'qr' | 'barcode', filename: string) {
-    if (!medicalCard) return
-    const source = format === 'qr' ? medicalCard.qr : medicalCard.barcode
-    if (!source) return
-    const link = document.createElement('a')
-    link.href = source
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-  }
-
   function openMedicalPdf() {
     if (!medicalCard) return
     const printWindow = window.open('', '_blank', 'width=980,height=1200')
