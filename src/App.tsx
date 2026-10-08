@@ -39,9 +39,8 @@ const SESSION_IDLE_LIMIT = 15 * 60 * 1000
 
 function buildMedicalPayload(account: Account) {
   return {
-    medicalId: account.medicalId,
-    fullName: account.name,
-    email: account.email,
+    id: account.medicalId,
+    name: account.name,
     dateOfBirth: account.profile.dateOfBirth || 'Not provided',
     bloodType: account.profile.bloodType || 'Not provided',
     allergies: account.profile.allergies || 'Not provided',
@@ -51,8 +50,7 @@ function buildMedicalPayload(account: Account) {
     insurance: account.profile.insurance || 'Not provided',
     emergencyNumber: account.profile.emergencyNumber || 'Not provided',
     notes: account.profile.notes || 'Not provided',
-    permissions: account.permissions,
-    contacts: account.contacts,
+    emergencyContacts: account.contacts.map(({ name, relationship, phone }) => ({ name, relationship, phone })),
   }
 }
 
@@ -651,7 +649,7 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
   const [editing, setEditing] = useState(ownProfile && !profile.profileSaved)
   const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
   const canEdit = ownProfile
-  const medicalPayload = JSON.stringify(buildMedicalPayload(profile), null, 2)
+  const medicalPayload = JSON.stringify(buildMedicalPayload(profile))
 
   useEffect(() => {
     if (!ownProfile) {
@@ -663,8 +661,8 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
       try {
         const [qr, barcode] = await Promise.all([
           QRCode.toDataURL(medicalPayload, {
-            width: 220,
-            margin: 1,
+            width: 280,
+            margin: 4,
             color: { dark: '#173b33', light: '#ffffff' },
           }),
           new Promise<string>((resolve) => {
