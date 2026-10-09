@@ -772,11 +772,11 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
   const [editing, setEditing] = useState(ownProfile && !profile.profileSaved)
   const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
   const canEdit = ownProfile
-  const medicalPayload = JSON.stringify(buildMedicalPayload(profile))
+  const medicalPayload = useMemo(() => buildMedicalPayload({ ...profile, profile: draft }), [profile, draft])
   const rescueUrl = useMemo(() => {
     const url = new URL(window.location.href)
     url.search = ''
-    url.hash = `rescue=${encodeMedicalPayload(medicalPayload)}`
+    url.hash = `rescue=${encodeMedicalPayload(JSON.stringify(medicalPayload))}`
     return url.toString()
   }, [medicalPayload])
 
@@ -814,6 +814,16 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
     if (!medicalCard) return
     const printWindow = window.open('', '_blank', 'width=980,height=1200')
     if (!printWindow) return
+    const details = [
+      ['Date of birth', medicalPayload.dob],
+      ['Blood type', medicalPayload.bt],
+      ['Allergies', medicalPayload.a],
+      ['Conditions', medicalPayload.c],
+      ['Medications', medicalPayload.med],
+      ['Doctor / clinic', medicalPayload.doc],
+      ['Insurance', medicalPayload.ins],
+      ['Emergency number', medicalPayload.en],
+    ]
     const html = `
       <html lang="en">
       <head>
@@ -832,27 +842,20 @@ function MedicalProfilePage({ profile, ownProfile, canSeeBasic, canSeePrivate, f
             <div class="medical-document-hero">
               <div class="medical-document-panel medical-document-meta">
                 <strong>Emergency profile</strong>
-                <h1>${escapeHtml(profile.name)}</h1>
-                <p><strong>Email:</strong> ${escapeHtml(profile.email)}<br/><strong>Medical ID:</strong> ${escapeHtml(profile.medicalId)}</p>
+                <h1>${escapeHtml(medicalPayload.n)}</h1>
+                <p><strong>Email:</strong> ${escapeHtml(medicalPayload.e || 'Not provided')}<br/><strong>Medical ID:</strong> ${escapeHtml(medicalPayload.i)}</p>
               </div>
               <div class="medical-document-panel medical-document-code-box">
                 <img src="${medicalCard.qr}" alt="QR code" />
-                <div class="medical-document-code-value">${escapeHtml(profile.medicalId)}</div>
+                <div class="medical-document-code-value">${escapeHtml(medicalPayload.i)}</div>
               </div>
             </div>
             <div class="medical-document-grid">
-              <div class="medical-document-item"><span>Date of birth</span><strong>${escapeHtml(profile.profile.dateOfBirth || 'Not provided')}</strong></div>
-              <div class="medical-document-item"><span>Blood type</span><strong>${escapeHtml(profile.profile.bloodType || 'Not provided')}</strong></div>
-              <div class="medical-document-item"><span>Allergies</span><strong>${escapeHtml(profile.profile.allergies || 'Not provided')}</strong></div>
-              <div class="medical-document-item"><span>Conditions</span><strong>${escapeHtml(profile.profile.conditions || 'Not provided')}</strong></div>
-              <div class="medical-document-item"><span>Medications</span><strong>${escapeHtml(profile.profile.medications || 'Not provided')}</strong></div>
-              <div class="medical-document-item"><span>Doctor / clinic</span><strong>${escapeHtml(profile.profile.doctor || 'Not provided')}</strong></div>
-              <div class="medical-document-item"><span>Insurance</span><strong>${escapeHtml(profile.profile.insurance || 'Not provided')}</strong></div>
-              <div class="medical-document-item"><span>Emergency number</span><strong>${escapeHtml(profile.profile.emergencyNumber || 'Not provided')}</strong></div>
+              ${details.map(([label, value]) => `<div class="medical-document-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')}
             </div>
-            <div class="medical-document-notes"><h2>Emergency contacts</h2>${profile.contacts.length ? `<div class="medical-document-contact-list">${profile.contacts.map((contact) => `<div class="medical-document-contact"><strong>${escapeHtml(contact.name)}</strong><span>${escapeHtml(contact.relationship)}</span><a href="tel:${contact.phone.replace(/[^+\d]/g, '')}">${escapeHtml(contact.phone)}</a></div>`).join('')}</div>` : '<p>No emergency contacts have been saved.</p>'}</div>
+            <div class="medical-document-notes"><h2>Emergency contacts</h2>${medicalPayload.ec.length ? `<div class="medical-document-contact-list">${medicalPayload.ec.map(([name, relationship, phone]) => `<div class="medical-document-contact"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(relationship)}</span><a href="tel:${phone.replace(/[^+\d]/g, '')}">${escapeHtml(phone)}</a></div>`).join('')}</div>` : '<p>No emergency contacts have been saved.</p>'}</div>
             <div class="medical-document-notes"><h2>Barcode</h2><img class="medical-document-barcode" src="${medicalCard.barcode}" alt="Barcode" /></div>
-            <div class="medical-document-notes"><h2>Medical notes</h2><p>${escapeHtml(profile.profile.notes || 'No additional medical notes have been saved.')}</p></div>
+            <div class="medical-document-notes"><h2>Medical notes</h2><p>${escapeHtml(medicalPayload.notes)}</p></div>
           </div>
         </div>
       </body>
