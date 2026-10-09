@@ -114,16 +114,19 @@ function escapeHtml(value: string) {
 }
 
 function generateMedicalCard(rescueUrl: string, medicalId: string) {
+  const qrOptions = {
+    width: 280,
+    margin: 4,
+    color: { dark: '#173b33', light: '#ffffff' },
+    errorCorrectionLevel: 'M' as const,
+  }
+
   return Promise.all([
-    QRCode.toDataURL(rescueUrl, {
-      width: 280,
-      margin: 4,
-      color: { dark: '#173b33', light: '#ffffff' },
-    }),
+    QRCode.toDataURL(rescueUrl, qrOptions).catch(() => QRCode.toDataURL(medicalId, qrOptions)),
     new Promise<string>((resolve, reject) => {
       const canvas = document.createElement('canvas')
       try {
-        JsBarcode(canvas, medicalId, {
+        JsBarcode(canvas, medicalId || 'FAMILYPULSE', {
           format: 'CODE128',
           width: 2,
           height: 94,
@@ -749,11 +752,9 @@ function MedicalCodeOverview({ account, onOpenMedical }: { account: Account; onO
     link.remove()
   }
 
-  if (!medicalCard) return null
   return <section className="overview-medical-code" aria-label="Medical ID codes">
-    <div className="overview-medical-code-id"><span>MEDICAL ID</span><strong>{account.medicalId}</strong><div className="overview-medical-code-actions"><button onClick={() => downloadDataAsset('qr')}>Download QR</button><button onClick={() => downloadDataAsset('barcode')}>Download barcode</button><button className="subtle-link" onClick={onOpenMedical}>Medical information<ArrowRight size={14}/></button></div></div>
-    <img className="overview-medical-qr" src={medicalCard.qr} alt="Medical ID QR code" />
-    <img className="overview-medical-barcode" src={medicalCard.barcode} alt="Medical ID barcode" />
+    <div className="overview-medical-code-id"><span>MEDICAL ID</span><strong>{account.medicalId}</strong><div className="overview-medical-code-actions"><button onClick={() => downloadDataAsset('qr')} disabled={!medicalCard}>Download QR</button><button onClick={() => downloadDataAsset('barcode')} disabled={!medicalCard}>Download barcode</button><button className="subtle-link" onClick={onOpenMedical}>Medical information<ArrowRight size={14}/></button></div></div>
+    {medicalCard ? <><img className="overview-medical-qr" src={medicalCard.qr} alt="Medical ID QR code" /><img className="overview-medical-barcode" src={medicalCard.barcode} alt="Medical ID barcode" /></> : <><div className="overview-medical-fallback">QR loading…</div><div className="overview-medical-fallback-barcode">Barcode loading…</div></>}
   </section>
 }
 
