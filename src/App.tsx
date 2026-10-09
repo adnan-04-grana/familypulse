@@ -725,12 +725,12 @@ function PageContent(props: {
 function CircleHelpIcon() { return <ShieldCheck size={21}/> }
 
 function MedicalCodeOverview({ account, onOpenMedical }: { account: Account; onOpenMedical: () => void }) {
-  const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>(null)
-  const medicalPayload = JSON.stringify(buildMedicalPayload(account))
+  const [medicalCard, setMedicalCard] = useState<{ qr: string; barcode: string } | null>({ qr: '', barcode: '' })
+  const medicalPayload = useMemo(() => buildMedicalPayload(account), [account])
   const rescueUrl = useMemo(() => {
     const url = new URL(window.location.href)
     url.search = ''
-    url.hash = `rescue=${encodeMedicalPayload(medicalPayload)}`
+    url.hash = `rescue=${encodeMedicalPayload(JSON.stringify(medicalPayload))}`
     return url.toString()
   }, [medicalPayload])
 
@@ -738,23 +738,72 @@ function MedicalCodeOverview({ account, onOpenMedical }: { account: Account; onO
     let cancelled = false
     void generateMedicalCard(rescueUrl, account.medicalId)
       .then((card) => { if (!cancelled) setMedicalCard(card) })
-      .catch(() => { if (!cancelled) setMedicalCard(null) })
+      .catch(() => { if (!cancelled) setMedicalCard({ qr: '', barcode: '' }) })
     return () => { cancelled = true }
   }, [rescueUrl, account.medicalId])
 
   function downloadDataAsset(format: 'qr' | 'barcode') {
-    if (!medicalCard) return
+    if (!medicalCard || !medicalCard.qr && !medicalCard.barcode) return
     const link = document.createElement('a')
-    link.href = format === 'qr' ? medicalCard.qr : medicalCard.barcode
+    const source = format === 'qr' ? medicalCard.qr : medicalCard.barcode
+    if (!source) return
+    link.href = source
     link.download = `${account.name.toLowerCase().replace(/\s+/g, '-')}-medical-${format}.png`
     document.body.appendChild(link)
     link.click()
     link.remove()
   }
 
+  function openPdf() {
+    const printWindow = window.open('', '_blank', 'width=980,height=1200')
+    if (!printWindow) return
+    const payload = buildMedicalPayload(account)
+    const html = `
+      <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>FamilyPulse Medical ID</title>
+        <style>${medicalDocumentStyles}\n@page { size: auto; margin: 12mm; }</style>
+      </head>
+      <body class="medical-document-preview">
+        <div class="medical-document-page">
+          <div class="medical-document-header">
+            <div class="medical-document-brand"><span class="medical-document-brand-mark">❤</span>family<span style="color: #285b49;">pulse</span></div>
+            <span class="medical-document-tag">MEDICAL ID</span>
+          </div>
+          <div class="medical-document-content">
+            <div class="medical-document-hero">
+              <div class="medical-document-panel medical-document-meta">
+                <strong>Emergency profile</strong>
+                <h1>${escapeHtml(payload.n)}</h1>
+                <p><strong>Email:</strong> ${escapeHtml(payload.e || 'Not provided')}<br/><strong>Medical ID:</strong> ${escapeHtml(payload.i)}</p>
+              </div>
+              <div class="medical-document-panel medical-document-code-box">
+                <img src="${medicalCard?.qr || ''}" alt="QR code" />
+                <div class="medical-document-code-value">${escapeHtml(payload.i)}</div>
+              </div>
+            </div>
+            <div class="medical-document-grid">
+              ${[['Date of birth', payload.dob], ['Blood type', payload.bt], ['Allergies', payload.a], ['Conditions', payload.c], ['Medications', payload.med], ['Doctor / clinic', payload.doc], ['Insurance', payload.ins], ['Emergency number', payload.en]].map(([label, value]) => `<div class="medical-document-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')}
+            </div>
+            <div class="medical-document-notes"><h2>Emergency contacts</h2>${payload.ec.length ? `<div class="medical-document-contact-list">${payload.ec.map(([name, relationship, phone]) => `<div class="medical-document-contact"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(relationship)}</span><a href="tel:${phone.replace(/[^+\d]/g, '')}">${escapeHtml(phone)}</a></div>`).join('')}</div>` : '<p>No emergency contacts have been saved.</p>'}</div>
+            <div class="medical-document-notes"><h2>Barcode</h2><img class="medical-document-barcode" src="${medicalCard?.barcode || ''}" alt="Barcode" /></div>
+            <div class="medical-document-notes"><h2>Medical notes</h2><p>${escapeHtml(payload.notes)}</p></div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    setTimeout(() => { try { printWindow.focus(); printWindow.print() } catch { /* no-op */ } }, 300)
+  }
+
   return <section className="overview-medical-code" aria-label="Medical ID codes">
-    <div className="overview-medical-code-id"><span>MEDICAL ID</span><strong>{account.medicalId}</strong><div className="overview-medical-code-actions"><button onClick={() => downloadDataAsset('qr')} disabled={!medicalCard}>Download QR</button><button onClick={() => downloadDataAsset('barcode')} disabled={!medicalCard}>Download barcode</button><button className="subtle-link" onClick={onOpenMedical}>Medical information<ArrowRight size={14}/></button></div></div>
-    {medicalCard ? <><img className="overview-medical-qr" src={medicalCard.qr} alt="Medical ID QR code" /><img className="overview-medical-barcode" src={medicalCard.barcode} alt="Medical ID barcode" /></> : <><div className="overview-medical-fallback">QR loading…</div><div className="overview-medical-fallback-barcode">Barcode loading…</div></>}
+    <div className="overview-medical-code-id"><span>MEDICAL ID</span><strong>{account.medicalId}</strong><div className="overview-medical-code-actions"><button onClick={() => downloadDataAsset('qr')} disabled={!medicalCard || !medicalCard.qr}>Download QR</button><button onClick={() => downloadDataAsset('barcode')} disabled={!medicalCard || !medicalCard.barcode}>Download barcode</button><button onClick={openPdf}>Download PDF</button><button className="subtle-link" onClick={onOpenMedical}>Medical information<ArrowRight size={14}/></button></div></div>
+    {medicalCard && medicalCard.qr ? <img className="overview-medical-qr" src={medicalCard.qr} alt="Medical ID QR code" /> : <div className="overview-medical-fallback">QR loading…</div>}
+    {medicalCard && medicalCard.barcode ? <img className="overview-medical-barcode" src={medicalCard.barcode} alt="Medical ID barcode" /> : <div className="overview-medical-fallback-barcode">Barcode loading…</div>}
   </section>
 }
 
