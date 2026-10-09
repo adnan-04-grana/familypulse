@@ -261,6 +261,9 @@ button { border: 0; cursor: pointer; }
 .overview-medical-code-id > span { color: #89958f; font-size: 8px; font-weight: 700; letter-spacing: .7px; }
 .overview-medical-code-id > strong { color: #40514a; font-family: ui-monospace, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
 .overview-medical-code-id .subtle-link { align-self: flex-start; margin-top: 2px; font-size: 9px; }
+.overview-medical-fallback,.overview-medical-fallback-barcode { display: grid; place-items: center; flex: 0 0 auto; color: #7d8b84; background: #f2f5f3; border: 1px solid #e2e9e4; border-radius: 6px; font-size: 8px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.overview-medical-fallback { width: 72px; height: 72px; }
+.overview-medical-fallback-barcode { width: 148px; height: 46px; }
 .overview-medical-qr { display: block; flex: 0 0 72px; width: 72px; height: 72px; object-fit: contain; }
 .overview-medical-barcode { display: block; flex: 0 1 148px; width: 148px; max-height: 46px; object-fit: contain; }
 @media (max-width: 620px) {
