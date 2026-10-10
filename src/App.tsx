@@ -643,7 +643,7 @@ function App() {
   const rescueProfile = readMedicalRescuePayload()
   if (rescueProfile) return <MedicalRescuePage profile={rescueProfile} />
   if (isBootstrapping) return <main className="auth-shell"><div className="auth-brand"><span className="brand-mark"><HeartPulse size={19}/></span><span>family<span className="brand-pulse">pulse</span></span></div><p>Connecting to your FamilyPulse account…</p></main>
-  if (!account) return <StandardAuthScreen mode={authMode} setMode={(mode) => { setAuthMode(mode); setAuthError('') }} error={authError} onSubmit={handleAuth} />
+  if (!account) return <AuthScreen mode={authMode} setMode={(mode) => { setAuthMode(mode); setAuthError('') }} error={authError} onSubmit={handleAuth} />
 
   return <main className="app-shell">
     <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
@@ -663,6 +663,34 @@ function App() {
     {contactModal && <ContactDialog onClose={() => setContactModal(false)} onSubmit={saveContact} />}
     {toast && <div className="toast" role="status"><ShieldCheck size={16}/>{toast}</div>}
   </main>
+}
+
+function AuthScreen({ mode, setMode, error, onSubmit }: { mode: AuthMode; setMode: (mode: AuthMode) => void; error: string; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
+  if (mode === 'forgot' || mode === 'reset' || mode === 'resend-verification') {
+    const isReset = mode === 'reset'
+    const isVerification = mode === 'resend-verification'
+    return <main className="auth-shell">
+      <div className="auth-brand"><span className="brand-mark"><HeartPulse size={19}/></span><span>family<span className="brand-pulse">pulse</span></span></div>
+      <section className="auth-card auth-recovery-card">
+        <span className="eyebrow">ACCOUNT RECOVERY</span>
+        <h2>{isReset ? 'Choose a new password.' : isVerification ? 'Resend verification.' : 'Reset your password.'}</h2>
+        <p className="auth-subtitle">{isReset ? 'Use a new password between 12 and 128 characters.' : isVerification ? 'We will send a fresh verification link if your account needs one.' : 'Enter your account email and we will send a reset link if it exists.'}</p>
+        <form className="auth-form" onSubmit={onSubmit}>
+          {!isReset && <label>Email address<input required name="email" type="email" autoComplete="email" maxLength={254} placeholder="you@example.com"/></label>}
+          {isReset && <label>New password<input required name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} placeholder="12 characters minimum"/></label>}
+          {error && <div className="auth-error" role="status">{error}</div>}
+          <button className="primary-button auth-submit" type="submit">{isReset ? 'Save new password' : isVerification ? 'Resend verification email' : 'Send reset link'}<ArrowRight size={15}/></button>
+        </form>
+        <button className="auth-back-link" type="button" onClick={() => setMode('login')}>Back to sign in</button>
+      </section>
+      <footer className="auth-footer"><span>FamilyPulse</span><span>For urgent help, contact local emergency services.</span></footer>
+    </main>
+  }
+
+  return <>
+    <StandardAuthScreen mode={mode} setMode={setMode} error={error} onSubmit={onSubmit}/>
+    {mode === 'login' && <div className="auth-recovery-actions"><button type="button" onClick={() => setMode('forgot')}>Forgot password?</button><button type="button" onClick={() => setMode('resend-verification')}>Resend verification email</button></div>}
+  </>
 }
 
 function StandardAuthScreen({ mode, setMode, error, onSubmit }: { mode: 'signup' | 'login' | 'join'; setMode: (mode: 'signup' | 'login' | 'join') => void; error: string; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
