@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
   email TEXT NOT NULL UNIQUE,
+  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
   password_salt TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   password_iterations INTEGER NOT NULL DEFAULT 600000,
@@ -14,6 +15,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   active_circle_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE;
 
 CREATE TABLE IF NOT EXISTS circles (
   id TEXT PRIMARY KEY,
@@ -81,7 +84,17 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('verify-email', 'reset-password')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ
+);
+
 CREATE INDEX IF NOT EXISTS circle_members_account_idx ON circle_members(account_id);
 CREATE INDEX IF NOT EXISTS safety_events_circle_created_idx ON safety_events(circle_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS notifications_account_created_idx ON notifications(account_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS sessions_account_idx ON sessions(account_id);
+CREATE INDEX IF NOT EXISTS email_tokens_account_purpose_idx ON email_tokens(account_id, purpose, expires_at);
