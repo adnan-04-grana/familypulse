@@ -262,7 +262,9 @@ app.use(express.json({ limit: '32kb' }))
 app.use(async (request, response, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
     const origin = request.get('origin')
-    const requestHost = request.get('x-forwarded-host') ?? request.get('host')
+    const requestHost = process.env.NODE_ENV === 'development'
+      ? request.get('x-forwarded-host') ?? request.get('host')
+      : request.get('host')
     if (origin && new URL(origin).host !== requestHost) return fail(response, 403, 'Cross-origin request denied.')
   }
   next()
@@ -383,6 +385,7 @@ app.post('/api/auth/reset-password', authLimiter, async (request, response, next
       await client.query('UPDATE email_tokens SET consumed_at = now() WHERE token_hash = $1', [sha256(token)])
       await client.query('DELETE FROM sessions WHERE account_id = $1', [emailToken.account_id])
     })
+    clearSessionCookie(response)
     response.json({ ok: true })
   } catch (error) { next(error) }
 })
