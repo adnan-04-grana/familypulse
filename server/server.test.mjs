@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { createServer } from 'node:net'
 import { after, test } from 'node:test'
+import webPush from 'web-push'
 import 'dotenv/config'
 
 let serverProcess
@@ -63,10 +64,19 @@ async function waitForEmailToken(purpose) {
 
 test('API persists accounts and enforces circle permissions and invite use', async (context) => {
   const port = await availablePort()
+  const vapidKeys = webPush.generateVAPIDKeys()
   apiBase = `http://127.0.0.1:${port}`
   serverProcess = spawn(process.execPath, ['server/index.mjs'], {
     cwd: process.cwd(),
-    env: { ...process.env, API_PORT: String(port), NODE_ENV: 'test', REQUIRE_EMAIL_VERIFICATION: 'true' },
+    env: {
+      ...process.env,
+      API_PORT: String(port),
+      NODE_ENV: 'test',
+      REQUIRE_EMAIL_VERIFICATION: 'true',
+      VAPID_PUBLIC_KEY: vapidKeys.publicKey,
+      VAPID_PRIVATE_KEY: vapidKeys.privateKey,
+      VAPID_SUBJECT: 'mailto:test@example.test',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   serverOutput = ''
@@ -164,6 +174,20 @@ test('API persists accounts and enforces circle permissions and invite use', asy
   assert.equal(checkIn.data.store.events.length, 1)
   const memberAfterCheckIn = await request('/api/state', { cookie: memberCookie })
   assert.equal(memberAfterCheckIn.data.store.notifications.length, 1)
+
+  const pushConfig = await request('/api/push/config')
+  assert.equal(pushConfig.data.publicKey, vapidKeys.publicKey)
+  const endpoint = `https://push.example.test/${suffix}`
+  const subscription = await request('/api/push/subscription', {
+    method: 'POST',
+    cookie: memberCookie,
+    body: { endpoint, keys: { p256dh: randomBytes(65).toString('base64url'), auth: randomBytes(16).toString('base64url') } },
+  })
+  assert.equal(subscription.response.status, 200)
+  const removedSubscription = await request('/api/push/subscription', {
+    method: 'DELETE', cookie: memberCookie, body: { endpoint },
+  })
+  assert.equal(removedSubscription.response.status, 200)
 
   const reusedInvite = await request('/api/auth/join', {
     method: 'POST',
