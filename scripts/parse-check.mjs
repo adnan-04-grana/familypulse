@@ -7,3 +7,15 @@ for (const diagnostic of source.parseDiagnostics) {
   const position = source.getLineAndCharacterOfPosition(diagnostic.start ?? 0)
   console.log(`${position.line + 1}:${position.character + 1} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`)
 }
+const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, source.text)
+const braces = []
+let token = scanner.scan()
+while (token !== ts.SyntaxKind.EndOfFileToken) {
+  if (token === ts.SyntaxKind.OpenBraceToken) braces.push(scanner.getTokenPos())
+  if (token === ts.SyntaxKind.CloseBraceToken) braces.pop()
+  token = scanner.scan()
+}
+for (const position of braces) {
+  const location = source.getLineAndCharacterOfPosition(position)
+  console.log(`Unclosed brace at ${location.line + 1}:${location.character + 1}`)
+}
