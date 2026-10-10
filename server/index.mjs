@@ -6,6 +6,7 @@ import express from 'express'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import nodemailer from 'nodemailer'
+import webPush from 'web-push'
 import pg from 'pg'
 import 'dotenv/config'
 
@@ -20,6 +21,8 @@ const mailer = smtpConfigured ? nodemailer.createTransport({
   secure: process.env.SMTP_SECURE === 'true',
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 }) : null
+const pushConfigured = Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_SUBJECT)
+if (pushConfigured) webPush.setVapidDetails(process.env.VAPID_SUBJECT, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY)
 const requireVerifiedEmail = process.env.NODE_ENV === 'production' || process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || smtpConfigured
 const sessionCookie = 'familypulse_session'
 const inviteLifetimeMs = 15 * 60 * 1000
@@ -100,6 +103,25 @@ async function sendAccountLink(email, purpose, token) {
     return
   }
   await mailer.sendMail({ from: process.env.SMTP_FROM, to: email, subject, text })
+}
+
+async function sendPushNotifications(accountIds, payload) {
+  if (!pushConfigured || accountIds.length === 0) return
+  const { rows: subscriptions } = await pool.query(
+    'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE account_id = ANY($1::text[])',
+    [accountIds],
+  )
+  await Promise.all(subscriptions.map(async (subscription) => {
+    try {
+      await webPush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify(payload))
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await pool.query('DELETE FROM push_subscriptions WHERE id = $1', [subscription.id])
+      } else {
+        console.error('Push notification delivery failed.', error)
+      }
+    }
+  }))
 }
 
 function fail(response, status, message) {
@@ -275,6 +297,10 @@ app.get('/api/health', async (_request, response, next) => {
     await pool.query('SELECT 1')
     response.json({ ok: true })
   } catch (error) { next(error) }
+})
+
+app.get('/api/push/config', (_request, response) => {
+  response.json({ publicKey: pushConfigured ? process.env.VAPID_PUBLIC_KEY : null })
 })
 
 app.post('/api/auth/signup', authLimiter, async (request, response, next) => {
@@ -453,6 +479,32 @@ app.get('/api/state', async (request, response, next) => {
   } catch (error) { next(error) }
 })
 
+app.post('/api/push/subscription', async (request, response, next) => {
+  try {
+    const { endpoint, keys } = request.body
+    let endpointUrl
+    try { endpointUrl = new URL(endpoint) } catch { return fail(response, 400, 'Invalid push subscription.') }
+    if (!pushConfigured || endpointUrl.protocol !== 'https:' || typeof keys?.p256dh !== 'string' || typeof keys?.auth !== 'string' || keys.p256dh.length > 256 || keys.auth.length > 128) return fail(response, 400, 'Push notifications are unavailable or the subscription is invalid.')
+    await pool.query(
+      `INSERT INTO push_subscriptions (account_id, endpoint, p256dh, auth)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (endpoint) DO UPDATE SET account_id = EXCLUDED.account_id, p256dh = EXCLUDED.p256dh,
+       auth = EXCLUDED.auth, updated_at = now()`,
+      [request.accountId, endpointUrl.toString(), keys.p256dh, keys.auth],
+    )
+    response.json({ ok: true })
+  } catch (error) { next(error) }
+})
+
+app.delete('/api/push/subscription', async (request, response, next) => {
+  try {
+    const endpoint = request.body?.endpoint
+    if (typeof endpoint !== 'string') return fail(response, 400, 'Invalid push subscription.')
+    await pool.query('DELETE FROM push_subscriptions WHERE account_id = $1 AND endpoint = $2', [request.accountId, endpoint])
+    response.json({ ok: true })
+  } catch (error) { next(error) }
+})
+
 app.post('/api/auth/logout', async (request, response, next) => {
   try {
     const token = readCookie(request, sessionCookie)
@@ -466,6 +518,7 @@ app.post('/api/actions', async (request, response, next) => {
   try {
     const { type, payload = {} } = request.body
     const accountId = request.accountId
+    let pushMessage = null
     await transaction(async (client) => {
       const { rows: [account] } = await client.query('SELECT * FROM accounts WHERE id = $1 FOR UPDATE', [accountId])
       if (!account) throw Object.assign(new Error('Account no longer exists.'), { status: 401 })
@@ -526,6 +579,7 @@ app.post('/api/actions', async (request, response, next) => {
         const detail = `${account.name} requested a check-in in ${circles.map((circle) => circle.name).join(', ')}. Contact them directly to confirm their safety.`
         for (const circle of circles) await client.query('INSERT INTO safety_events (id, circle_id, member_id, created_by, summary, status, created_at) VALUES ($1, $2, $3, $3, $4, $5, $6)', [eventId, circle.id, accountId, 'Manual safety check-in requested', 'open', createdAt])
         for (const recipient of recipients) await client.query('INSERT INTO notifications (id, account_id, title, detail, created_at) VALUES ($1, $2, $3, $4, $5)', [makeId('notice'), recipient.account_id, 'Family safety check-in requested', detail, createdAt])
+        pushMessage = { accountIds: recipients.map((recipient) => recipient.account_id), payload: { title: 'Family safety check-in requested', body: detail, url: '/' } }
       } else if (type === 'update-event') {
         if (!['responding', 'resolved', 'cancelled'].includes(payload.status)) throw Object.assign(new Error('Invalid check-in status.'), { status: 400 })
         const { rows: [event] } = await client.query('SELECT e.* FROM safety_events e JOIN circle_members cm ON cm.circle_id = e.circle_id AND cm.account_id = $2 WHERE e.id = $1 FOR UPDATE', [payload.eventId, accountId])
@@ -547,6 +601,7 @@ app.post('/api/actions', async (request, response, next) => {
       clearSessionCookie(response)
       return response.json({ ok: true })
     }
+    if (pushMessage) await sendPushNotifications(pushMessage.accountIds, pushMessage.payload)
     response.json(await getState(accountId))
   } catch (error) { next(error) }
 })
