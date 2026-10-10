@@ -43,6 +43,12 @@ async function apiRequest<T>(path: string, body?: unknown, method = body === und
   if (!response.ok) throw new Error(result.error ?? 'The FamilyPulse service could not complete this request.')
   return result
 }
+
+function decodeApplicationServerKey(value: string) {
+  const base64 = value.replaceAll('-', '+').replaceAll('_', '/')
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0))
+}
 const SESSION_ACTIVITY_KEY = 'familypulse-session-last-active'
 const SESSION_IDLE_LIMIT = 15 * 60 * 1000
 
@@ -233,6 +239,16 @@ function App() {
     applyRemoteState(remote)
   }
 
+  async function syncPushSubscription() {
+    if (!('serviceWorker' in navigator) || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    const { publicKey } = await apiRequest<{ publicKey: string | null }>('/api/push/config')
+    if (!publicKey) return
+    const registration = await navigator.serviceWorker.register('/sw.js')
+    const subscription = await registration.pushManager.getSubscription()
+      ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeApplicationServerKey(publicKey) })
+    await apiRequest('/api/push/subscription', subscription.toJSON())
+  }
+
   async function performAction(type: string, payload: Record<string, unknown> = {}) {
     try {
       const remote = await apiRequest<ApiState | { ok: true }>('/api/actions', { type, payload })
@@ -421,6 +437,7 @@ function App() {
   function notify(message: string) {
     setToast(message)
     window.setTimeout(() => setToast(''), 3200)
+    if (message === 'Desktop alerts enabled for this browser.') void syncPushSubscription().catch(() => undefined)
   }
   function handleLogout() {
     void apiRequest('/api/auth/logout', {}).catch(() => undefined)
