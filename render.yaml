@@ -27,6 +27,12 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:admin@example.com
 
 databases:
   - name: familypulse-db
