@@ -211,6 +211,8 @@ function App() {
   const [authMode, setAuthMode] = useState<AuthMode>(() => new URLSearchParams(window.location.search).has('reset-password') ? 'reset' : 'signup')
   const [authError, setAuthError] = useState('')
   const [page, setPage] = useState<PageKey>('dashboard')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [circleSwitcherOpen, setCircleSwitcherOpen] = useState(false)
   const [toast, setToast] = useState('')
@@ -435,6 +437,11 @@ function App() {
     setPage('dashboard')
   }
   function notify(message: string) {
+    if (message === 'Search is not available yet.') {
+      setSearchQuery('')
+      setSearchOpen(true)
+      return
+    }
     setToast(message)
     window.setTimeout(() => setToast(''), 3200)
     if (message === 'Desktop alerts enabled for this browser.') void syncPushSubscription().catch(() => undefined)
@@ -678,8 +685,38 @@ function App() {
     </section>
     {inviteModal && <InviteDialog mode={inviteModal} invite={inviteDraft} onClose={() => setInviteModal(null)} onCreate={createInvite} onNotify={notify} />}
     {contactModal && <ContactDialog onClose={() => setContactModal(false)} onSubmit={saveContact} />}
+    {searchOpen && <SearchDialog query={searchQuery} onQueryChange={setSearchQuery} accounts={circleAccounts} circles={joinedCircles} events={store.events} notifications={alerts} onNavigate={(target) => { setPage(target); setSearchOpen(false) }} onClose={() => setSearchOpen(false)} />}
     {toast && <div className="toast" role="status"><ShieldCheck size={16}/>{toast}</div>}
   </main>
+}
+
+function SearchDialog({ query, onQueryChange, accounts, circles, events, notifications, onNavigate, onClose }: {
+  query: string; onQueryChange: (query: string) => void; accounts: Account[]; circles: FamilyCircle[];
+  events: SafetyEvent[]; notifications: AppNotification[]; onNavigate: (page: PageKey) => void; onClose: () => void;
+}) {
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const results = normalizedQuery ? [
+    ...accounts.filter((account) => `${account.name} ${account.email}`.toLocaleLowerCase().includes(normalizedQuery)).map((account) => ({
+      id: `account-${account.id}`, title: account.name, detail: account.email || 'Family member', page: 'family-members' as PageKey,
+    })),
+    ...circles.filter((circle) => circle.name.toLocaleLowerCase().includes(normalizedQuery)).map((circle) => ({
+      id: `circle-${circle.id}`, title: circle.name, detail: `${circle.memberIds.length} family members`, page: 'family-settings' as PageKey,
+    })),
+    ...events.filter((event) => event.summary.toLocaleLowerCase().includes(normalizedQuery)).map((event) => ({
+      id: `event-${event.id}-${event.circleId}`, title: event.summary, detail: `${event.status} · ${new Date(event.createdAt).toLocaleString()}`, page: 'emergency-history' as PageKey,
+    })),
+    ...notifications.filter((item) => `${item.title} ${item.detail}`.toLocaleLowerCase().includes(normalizedQuery)).map((item) => ({
+      id: `notification-${item.id}`, title: item.title, detail: item.detail, page: 'notifications' as PageKey,
+    })),
+  ].slice(0, 8) : []
+
+  return <div className="modal-backdrop search-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <section className="member-modal search-dialog" role="dialog" aria-modal="true" aria-labelledby="search-title">
+      <div className="modal-heading"><div><span className="eyebrow">FAMILY PULSE</span><h2 id="search-title">Search your circle</h2></div><button className="icon-button" aria-label="Close search" onClick={onClose}><X size={18}/></button></div>
+      <label className="search-input"><Search size={16}/><input autoFocus value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="People, circles, check-ins" onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}/></label>
+      {normalizedQuery ? results.length ? <div className="search-results">{results.map((result) => <button key={result.id} onClick={() => onNavigate(result.page)}><span><strong>{result.title}</strong><small>{result.detail}</small></span><ArrowRight size={15}/></button>)}</div> : <p className="search-empty">No matching family information.</p> : <p className="search-empty">Search names, circles, check-ins, and notifications.</p>}
+    </section>
+  </div>
 }
 
 function AuthScreen({ mode, setMode, error, onSubmit }: { mode: AuthMode; setMode: (mode: AuthMode) => void; error: string; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
