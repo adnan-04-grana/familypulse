@@ -231,7 +231,7 @@ async function getState(accountId) {
       invites: [],
       events,
       notifications,
-    },
+          const accountId = await transaction(async (client) => {
     locations: visibleLocations.rows,
     presence: presenceRows.map((item) => ({ accountId: item.accountId, lastSeenAt: Number(item.lastSeenAt) })),
   }
@@ -245,11 +245,11 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-      objectSrc: ["'none'"],
+          if (accountId.token) {
+            await sendAccountLink(email, 'verify-email', accountId.token)
       scriptSrc: ["'self'", "'sha256-Z2/iFzh9VMlVkEOar1f/oSHWwQk3ve1qk/C2WdsC4Xk='"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org'],
+          response.json(await getState(accountId.accountId))
       fontSrc: ["'self'", 'data:'],
       connectSrc: ["'self'", 'https://nominatim.openstreetmap.org'],
     },
@@ -417,11 +417,11 @@ app.post('/api/auth/join', authLimiter, async (request, response, next) => {
       await createSession(client, id, response)
       return { accountId: id, token: null }
     })
-    if (accountId.token) {
-      await sendAccountLink(cleanEmail, 'verify-email', accountId.token)
+      if (accountId.token) {
+        await sendAccountLink(cleanEmail, 'verify-email', accountId.token)
       return response.status(202).json({ requiresVerification: true })
     }
-    response.json(await getState(accountId.accountId))
+      response.json(await getState(accountId.accountId))
   } catch (error) { next(error) }
 })
 
@@ -583,6 +583,12 @@ app.use((error, _request, response, _next) => {
 })
 
 const schema = await readFile(resolve(root, 'server/schema.sql'), 'utf8')
+if (process.env.NODE_ENV === 'production') {
+  const requiredEnvironment = ['DATABASE_URL', 'APP_BASE_URL', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM']
+  const missingEnvironment = requiredEnvironment.filter((name) => !process.env[name])
+  if (missingEnvironment.length) throw new Error(`Missing required production configuration: ${missingEnvironment.join(', ')}`)
+  if (new URL(process.env.APP_BASE_URL).protocol !== 'https:') throw new Error('APP_BASE_URL must use HTTPS in production.')
+}
 await pool.query(schema)
 await pool.query('DELETE FROM locations WHERE expires_at <= now()')
 const locationCleanup = setInterval(() => {
