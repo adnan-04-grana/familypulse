@@ -134,7 +134,7 @@ async function getState(accountId) {
      GROUP BY c.id ORDER BY c.created_at`,
     [accountId],
   )
-  const memberIds = [...new Set(circles.flatMap((circle) => circle.memberIds))]
+  const memberIds = [...new Set([accountId, ...circles.flatMap((circle) => circle.memberIds)])]
   const { rows: accountRows } = memberIds.length
     ? await pool.query(
       `SELECT a.*, EXISTS (SELECT 1 FROM circle_members cm WHERE cm.account_id = a.id AND cm.circle_id = $2) AS in_active_circle
@@ -182,7 +182,7 @@ async function getState(accountId) {
         return {
           id: item.id,
           name: item.name,
-          email: item.email,
+          email: own || permissions.basic ? item.email : '',
           passwordSalt: '',
           passwordHash: '',
           passwordIterations: item.password_iterations,
@@ -296,6 +296,7 @@ app.use('/api', async (request, response, next) => {
       clearSessionCookie(response)
       return fail(response, 401, 'Your session expired. Sign in again.')
     }
+    setSessionCookie(response, token)
     request.accountId = session.account_id
     next()
   } catch (error) { next(error) }
