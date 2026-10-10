@@ -210,7 +210,8 @@ app.use(express.json({ limit: '32kb' }))
 app.use(async (request, response, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
     const origin = request.get('origin')
-    if (origin && new URL(origin).host !== request.get('host')) return fail(response, 403, 'Cross-origin request denied.')
+    const requestHost = request.get('x-forwarded-host') ?? request.get('host')
+    if (origin && new URL(origin).host !== requestHost) return fail(response, 403, 'Cross-origin request denied.')
   }
   next()
 })
