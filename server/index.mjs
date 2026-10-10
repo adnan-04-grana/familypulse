@@ -395,7 +395,7 @@ app.post('/api/auth/join', authLimiter, async (request, response, next) => {
       return fail(response, 400, 'Enter a valid name, email, password, and invite credentials.')
     }
     const inviteHash = sha256(`familypulse-invite-v1:${code.trim().toUpperCase()}:${passcode.trim()}`)
-    const accountId = await transaction(async (client) => {
+    const registration = await transaction(async (client) => {
       const { rows: [invite] } = await client.query(
         `SELECT * FROM invites WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > $2
          AND created_at <= $2 AND expires_at <= created_at + $3 FOR UPDATE`,
@@ -413,11 +413,11 @@ app.post('/api/auth/join', authLimiter, async (request, response, next) => {
       await createSession(client, id, response)
       return { accountId: id, token: null }
     })
-      if (accountId.token) {
-        await sendAccountLink(cleanEmail, 'verify-email', accountId.token)
+    if (registration.token) {
+      await sendAccountLink(cleanEmail, 'verify-email', registration.token)
       return response.status(202).json({ requiresVerification: true })
     }
-      response.json(await getState(accountId.accountId))
+    response.json(await getState(registration.accountId))
   } catch (error) { next(error) }
 })
 
