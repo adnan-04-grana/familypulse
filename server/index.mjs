@@ -231,7 +231,6 @@ async function getState(accountId) {
       invites: [],
       events,
       notifications,
-          const accountId = await transaction(async (client) => {
     locations: visibleLocations.rows,
     presence: presenceRows.map((item) => ({ accountId: item.accountId, lastSeenAt: Number(item.lastSeenAt) })),
   }
@@ -245,11 +244,8 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-          if (accountId.token) {
-            await sendAccountLink(email, 'verify-email', accountId.token)
       scriptSrc: ["'self'", "'sha256-Z2/iFzh9VMlVkEOar1f/oSHWwQk3ve1qk/C2WdsC4Xk='"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-          response.json(await getState(accountId.accountId))
       fontSrc: ["'self'", 'data:'],
       connectSrc: ["'self'", 'https://nominatim.openstreetmap.org'],
     },
