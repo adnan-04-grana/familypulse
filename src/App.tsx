@@ -31,9 +31,9 @@ type ApiState = { accountId: string; store: LocalStore; locations: GeoPoint[]; p
 function timestampNow() { return Date.now() }
 const INVITE_LIFETIME_MS = 15 * 60 * 1000
 
-async function apiRequest<T>(path: string, body?: unknown): Promise<T> {
+async function apiRequest<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
   const response = await fetch(path, {
-    method: body === undefined ? 'GET' : 'POST',
+    method,
     credentials: 'same-origin',
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -198,8 +198,9 @@ const pageDetails: Record<PageKey, { title: string; eyebrow: string; description
 }
 
 function App() {
-  const [store, setStore] = useState<LocalStore>(() => readStore())
+  const [store, setStore] = useState<LocalStore>(() => emptyStore())
   const [accountId, setAccountId] = useState<string | null>(() => sessionStorage.getItem('familypulse-session'))
+  const [isBootstrapping, setIsBootstrapping] = useState(true)
   const [authMode, setAuthMode] = useState<'signup' | 'login' | 'join'>('signup')
   const [authError, setAuthError] = useState('')
   const [page, setPage] = useState<PageKey>('dashboard')
@@ -216,16 +217,45 @@ function App() {
   const [activeMemberTimes, setActiveMemberTimes] = useState<Record<string, number>>({})
   const [locationError, setLocationError] = useState('')
 
-  useEffect(() => {
-    try { saveStore(store) } catch (error) { console.warn(error instanceof Error ? error.message : 'Could not save local data.') }
-  }, [store])
+  function applyRemoteState(remote: ApiState) {
+    setStore(remote.store)
+    setAccountId(remote.accountId)
+    sessionStorage.setItem('familypulse-session', remote.accountId)
+    setGeoPoints(Object.fromEntries(remote.locations.map((point) => [point.accountId, point])))
+    setGeoAddresses(Object.fromEntries(remote.locations.map((point) => [point.accountId, 'Location shared'])))
+    setActiveMemberTimes(Object.fromEntries(remote.presence.map((item) => [item.accountId, item.lastSeenAt])))
+  }
+
+  async function refreshRemoteState() {
+    const remote = await apiRequest<ApiState>('/api/state')
+    applyRemoteState(remote)
+  }
+
+  async function performAction(type: string, payload: Record<string, unknown> = {}) {
+    try {
+      const remote = await apiRequest<ApiState>('/api/actions', { type, payload })
+      applyRemoteState(remote)
+      return true
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'The change could not be saved.')
+      return false
+    }
+  }
 
   useEffect(() => {
-    function syncStore(event: StorageEvent) {
-      if (event.key === null || event.key === 'familypulse-local-v1') setStore(readStore())
-    }
-    window.addEventListener('storage', syncStore)
-    return () => window.removeEventListener('storage', syncStore)
+    let cancelled = false
+    void apiRequest<ApiState>('/api/state').then((remote) => {
+      if (!cancelled) applyRemoteState(remote)
+    }).catch(() => {
+      if (cancelled) return
+      sessionStorage.removeItem('familypulse-session')
+      sessionStorage.removeItem(SESSION_ACTIVITY_KEY)
+      setAccountId(null)
+      setStore(emptyStore())
+    }).finally(() => {
+      if (!cancelled) setIsBootstrapping(false)
+    })
+    return () => { cancelled = true }
   }, [])
 
   const account = store.accounts.find((item) => item.id === accountId) ?? null
@@ -245,28 +275,9 @@ function App() {
 
   useEffect(() => {
     if (!activeAccountId) return
-    const presenceKey = 'familypulse-presence-v1'
-    const readPresence = () => {
-      try {
-        return JSON.parse(localStorage.getItem(presenceKey) ?? '{}') as Record<string, number>
-      } catch {
-        return {}
-      }
-    }
-    const updatePresence = () => {
-      const nextPresence = { ...readPresence(), [activeAccountId]: timestampNow() }
-      try { localStorage.setItem(presenceKey, JSON.stringify(nextPresence)) } catch { /* Presence remains available in this tab. */ }
-      setActiveMemberTimes(nextPresence)
-    }
-    const syncPresence = (event: StorageEvent) => {
-      if (event.key === presenceKey) setActiveMemberTimes(readPresence())
-    }
-    updatePresence()
-    const heartbeatId = window.setInterval(updatePresence, 30_000)
-    window.addEventListener('storage', syncPresence)
+    const heartbeatId = window.setInterval(() => { void refreshRemoteState().catch(() => undefined) }, 15_000)
     return () => {
       window.clearInterval(heartbeatId)
-      window.removeEventListener('storage', syncPresence)
     }
   }, [activeAccountId])
 
