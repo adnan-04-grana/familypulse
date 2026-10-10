@@ -22,6 +22,7 @@ import './App.css'
 import './medical-document.css'
 
 type PageKey = 'dashboard' | 'my-health' | 'family-members' | 'join-family' | 'member-profile' | 'emergency-center' | 'live-monitoring' | 'medical-information' | 'locations' | 'emergency-history' | 'wearable-device' | 'notifications' | 'privacy-permissions' | 'family-settings' | 'emergency-contacts' | 'account-settings'
+type AuthMode = 'signup' | 'login' | 'join' | 'forgot' | 'reset' | 'resend-verification'
 type GeoPoint = { latitude: number; longitude: number; accuracy: number; timestamp: number }
 type BatteryManagerLike = EventTarget & { level: number }
 type InviteDraft = { code: string; passcode: string; expiresAt: number } | null
@@ -201,7 +202,7 @@ function App() {
   const [store, setStore] = useState<LocalStore>(() => emptyStore())
   const [accountId, setAccountId] = useState<string | null>(() => sessionStorage.getItem('familypulse-session'))
   const [isBootstrapping, setIsBootstrapping] = useState(true)
-  const [authMode, setAuthMode] = useState<'signup' | 'login' | 'join'>('signup')
+  const [authMode, setAuthMode] = useState<AuthMode>(() => new URLSearchParams(window.location.search).has('reset-password') ? 'reset' : 'signup')
   const [authError, setAuthError] = useState('')
   const [page, setPage] = useState<PageKey>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -255,17 +256,47 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
-    void apiRequest<ApiState>('/api/state').then((remote) => {
-      if (!cancelled) applyRemoteState(remote)
-    }).catch(() => {
-      if (cancelled) return
-      sessionStorage.removeItem('familypulse-session')
-      sessionStorage.removeItem(SESSION_ACTIVITY_KEY)
-      setAccountId(null)
-      setStore(emptyStore())
-    }).finally(() => {
+    async function bootstrap() {
+      const url = new URL(window.location.href)
+      const verificationToken = url.searchParams.get('verify-email')
+      const resetToken = url.searchParams.get('reset-password')
+      if (resetToken) {
+        sessionStorage.removeItem('familypulse-session')
+        setAccountId(null)
+        setStore(emptyStore())
+        setAuthMode('reset')
+        setIsBootstrapping(false)
+        return
+      }
+      if (verificationToken) {
+        try {
+          const remote = await apiRequest<ApiState>('/api/auth/verify-email', { token: verificationToken })
+          if (cancelled) return
+          applyRemoteState(remote)
+          setAuthError('Email verified. Your account is ready.')
+          url.searchParams.delete('verify-email')
+          window.history.replaceState({}, '', url)
+        } catch (error) {
+          if (!cancelled) {
+            setAuthMode('login')
+            setAuthError(error instanceof Error ? error.message : 'That verification link is invalid or expired.')
+          }
+        }
+      } else {
+        try {
+          const remote = await apiRequest<ApiState>('/api/state')
+          if (!cancelled) applyRemoteState(remote)
+        } catch {
+          if (cancelled) return
+          sessionStorage.removeItem('familypulse-session')
+          sessionStorage.removeItem(SESSION_ACTIVITY_KEY)
+          setAccountId(null)
+          setStore(emptyStore())
+        }
+      }
       if (!cancelled) setIsBootstrapping(false)
-    })
+    }
+    void bootstrap()
     return () => { cancelled = true }
   }, [])
 
