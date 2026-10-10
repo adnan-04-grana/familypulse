@@ -41,12 +41,31 @@ async function deleteAccount(cookie) {
   await request('/api/actions', { method: 'POST', cookie, body: { type: 'delete-account', payload: {} } })
 }
 
+async function waitForEmailToken(purpose) {
+  const marker = `Local ${purpose} link for `
+  const deadline = Date.now() + 3000
+  while (Date.now() < deadline) {
+    const start = serverOutput.lastIndexOf(marker)
+    if (start >= 0) {
+      const end = serverOutput.indexOf('\n', start)
+      const line = serverOutput.slice(start, end < 0 ? serverOutput.length : end)
+      const urlStart = line.indexOf(': ', marker.length)
+      if (urlStart >= 0) {
+        const token = new URL(line.slice(urlStart + 2)).searchParams.get(purpose)
+        if (token) return token
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error(`No ${purpose} link was logged by the test API.`)
+}
+
 test('API persists accounts and enforces circle permissions and invite use', async (context) => {
   const port = await availablePort()
   apiBase = `http://127.0.0.1:${port}`
   serverProcess = spawn(process.execPath, ['server/index.mjs'], {
     cwd: process.cwd(),
-    env: { ...process.env, API_PORT: String(port), NODE_ENV: 'test' },
+    env: { ...process.env, API_PORT: String(port), NODE_ENV: 'test', REQUIRE_EMAIL_VERIFICATION: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverOutput = ''
@@ -77,11 +96,16 @@ test('API persists accounts and enforces circle permissions and invite use', asy
     method: 'POST',
     body: { name: 'Integration Owner', email: `owner-${suffix}@example.test`, password },
   })
-  assert.equal(ownerSignup.response.status, 200)
-  assert.ok(ownerSignup.setCookie)
-  ownerCookie = ownerSignup.setCookie
-  ownerId = ownerSignup.data.accountId
-  assert.equal(ownerSignup.data.store.accounts[0].passwordHash, '')
+  assert.equal(ownerSignup.response.status, 202)
+  assert.equal(ownerSignup.data.requiresVerification, true)
+  const ownerVerification = await request('/api/auth/verify-email', {
+    method: 'POST', body: { token: await waitForEmailToken('verify-email') },
+  })
+  assert.equal(ownerVerification.response.status, 200)
+  assert.ok(ownerVerification.setCookie)
+  ownerCookie = ownerVerification.setCookie
+  ownerId = ownerVerification.data.accountId
+  assert.equal(ownerVerification.data.store.accounts[0].passwordHash, '')
 
   const profile = {
     dateOfBirth: '1990-01-01', bloodType: 'O+', allergies: 'Test allergy', conditions: '',
@@ -112,10 +136,14 @@ test('API persists accounts and enforces circle permissions and invite use', asy
     method: 'POST',
     body: { name: 'Integration Member', email: `member-${suffix}@example.test`, password, code: inviteCode, passcode: invitePasscode },
   })
-  assert.equal(memberSignup.response.status, 200)
-  memberCookie = memberSignup.setCookie
-  memberId = memberSignup.data.accountId
-  const hiddenOwner = memberSignup.data.store.accounts.find((account) => account.id === ownerId)
+  assert.equal(memberSignup.response.status, 202)
+  const memberVerification = await request('/api/auth/verify-email', {
+    method: 'POST', body: { token: await waitForEmailToken('verify-email') },
+  })
+  assert.equal(memberVerification.response.status, 200)
+  memberCookie = memberVerification.setCookie
+  memberId = memberVerification.data.accountId
+  const hiddenOwner = memberVerification.data.store.accounts.find((account) => account.id === ownerId)
   assert.equal(hiddenOwner.profile.allergies, '')
   assert.equal(hiddenOwner.email, '')
 
@@ -141,6 +169,28 @@ test('API persists accounts and enforces circle permissions and invite use', asy
     body: { name: 'Second Member', email: `reused-${suffix}@example.test`, password, code: inviteCode, passcode: invitePasscode },
   })
   assert.equal(reusedInvite.response.status, 400)
+
+  const resetRequest = await request('/api/auth/forgot-password', {
+    method: 'POST', body: { email: `owner-${suffix}@example.test` },
+  })
+  assert.equal(resetRequest.response.status, 200)
+  assert.match(resetRequest.data.message, /If the account exists/)
+  const resetToken = await waitForEmailToken('reset-password')
+  const resetPassword = `FamilyPulse-Reset-${randomUUID()}!`
+  const resetResult = await request('/api/auth/reset-password', {
+    method: 'POST', body: { token: resetToken, password: resetPassword },
+  })
+  assert.equal(resetResult.response.status, 200)
+  assert.equal((await request('/api/state', { cookie: ownerCookie })).response.status, 401)
+  const ownerLogin = await request('/api/auth/login', {
+    method: 'POST', body: { email: `owner-${suffix}@example.test`, password: resetPassword },
+  })
+  assert.equal(ownerLogin.response.status, 200)
+  ownerCookie = ownerLogin.setCookie
+  const reusedResetToken = await request('/api/auth/reset-password', {
+    method: 'POST', body: { token: resetToken, password },
+  })
+  assert.equal(reusedResetToken.response.status, 400)
 })
 
 after(async () => {
