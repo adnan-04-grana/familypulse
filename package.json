@@ -11,6 +11,7 @@
     "auto-push": "node scripts/auto-push.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --test server/server.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
