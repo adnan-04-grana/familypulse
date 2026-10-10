@@ -234,8 +234,8 @@ function App() {
 
   async function performAction(type: string, payload: Record<string, unknown> = {}) {
     try {
-      const remote = await apiRequest<ApiState>('/api/actions', { type, payload })
-      applyRemoteState(remote)
+      const remote = await apiRequest<ApiState | { ok: true }>('/api/actions', { type, payload })
+      if (type !== 'delete-account') applyRemoteState(remote as ApiState)
       return true
     } catch (error) {
       notify(error instanceof Error ? error.message : 'The change could not be saved.')
