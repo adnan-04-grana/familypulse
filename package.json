@@ -11,10 +11,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "concurrently": "^10.0.6",
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0",
     "fflate": "^0.8.3",
     "jsbarcode": "^3.12.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.51.0",
+    "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
