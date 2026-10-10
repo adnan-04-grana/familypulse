@@ -11,8 +11,18 @@ const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVaria
 const braces = []
 let token = scanner.scan()
 while (token !== ts.SyntaxKind.EndOfFileToken) {
-  if (token === ts.SyntaxKind.OpenBraceToken) braces.push(scanner.getTokenPos())
-  if (token === ts.SyntaxKind.CloseBraceToken) braces.pop()
+  if (token === ts.SyntaxKind.OpenBraceToken) {
+    const position = scanner.getTokenPos()
+    braces.push(position)
+    const line = source.getLineAndCharacterOfPosition(position).line + 1
+    if (line >= 389 && line <= 430) console.log(`{ ${line}:${source.getLineAndCharacterOfPosition(position).character + 1}`)
+  }
+  if (token === ts.SyntaxKind.CloseBraceToken) {
+    const position = scanner.getTokenPos()
+    const line = source.getLineAndCharacterOfPosition(position).line + 1
+    if (line >= 389 && line <= 430) console.log(`} ${line}:${source.getLineAndCharacterOfPosition(position).character + 1}`)
+    braces.pop()
+  }
   token = scanner.scan()
 }
 for (const position of braces) {
