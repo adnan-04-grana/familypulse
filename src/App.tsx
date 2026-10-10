@@ -26,7 +26,7 @@ type GeoPoint = { latitude: number; longitude: number; accuracy: number; timesta
 type BatteryManagerLike = EventTarget & { level: number }
 type InviteDraft = { code: string; passcode: string; expiresAt: number } | null
 type ProfileField = { key: keyof Account['profile']; label: string; type?: string; options?: string[]; access?: 'basic' | 'medical' | 'emergency' }
-type ApiState = { accountId: string; store: LocalStore; locations: GeoPoint[]; presence: { accountId: string; lastSeenAt: number }[] }
+type ApiState = { accountId: string; store: LocalStore; locations: (GeoPoint & { accountId: string })[]; presence: { accountId: string; lastSeenAt: number }[] }
 
 function timestampNow() { return Date.now() }
 const INVITE_LIFETIME_MS = 15 * 60 * 1000
@@ -221,8 +221,9 @@ function App() {
     setStore(remote.store)
     setAccountId(remote.accountId)
     sessionStorage.setItem('familypulse-session', remote.accountId)
-    setGeoPoints(Object.fromEntries(remote.locations.map((point) => [point.accountId, point])))
-    setGeoAddresses(Object.fromEntries(remote.locations.map((point) => [point.accountId, 'Location shared'])))
+    const locations = remote.locations.map((point) => ({ ...point, timestamp: Number(point.timestamp) }))
+    setGeoPoints(Object.fromEntries(locations.map((point) => [point.accountId, point])))
+    setGeoAddresses(Object.fromEntries(locations.map((point) => [point.accountId, 'Location shared'])))
     setActiveMemberTimes(Object.fromEntries(remote.presence.map((item) => [item.accountId, item.lastSeenAt])))
   }
 
