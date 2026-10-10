@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path'
 import express from 'express'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import nodemailer from 'nodemailer'
 import pg from 'pg'
 import 'dotenv/config'
 
@@ -12,6 +13,14 @@ const { Pool } = pg
 const app = express()
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const smtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM && process.env.SMTP_USER && process.env.SMTP_PASS)
+const mailer = smtpConfigured ? nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT ?? 587),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+}) : null
+const requireVerifiedEmail = process.env.NODE_ENV === 'production' || smtpConfigured
 const sessionCookie = 'familypulse_session'
 const inviteLifetimeMs = 15 * 60 * 1000
 const passwordIterations = 600_000
@@ -67,6 +76,30 @@ async function createSession(client, accountId, response) {
   const token = randomBytes(32).toString('base64url')
   await client.query('INSERT INTO sessions (token_hash, account_id) VALUES ($1, $2)', [sha256(token), accountId])
   setSessionCookie(response, token)
+}
+
+async function issueEmailToken(client, accountId, purpose, lifetimeMs) {
+  const token = randomBytes(32).toString('base64url')
+  await client.query('UPDATE email_tokens SET consumed_at = now() WHERE account_id = $1 AND purpose = $2 AND consumed_at IS NULL', [accountId, purpose])
+  await client.query(
+    'INSERT INTO email_tokens (token_hash, account_id, purpose, expires_at) VALUES ($1, $2, $3, now() + $4 * interval \'1 millisecond\')',
+    [sha256(token), accountId, purpose, lifetimeMs],
+  )
+  return token
+}
+
+async function sendAccountLink(email, purpose, token) {
+  const parameter = purpose === 'verify-email' ? 'verify-email' : 'reset-password'
+  const url = new URL('/', process.env.APP_BASE_URL ?? 'http://localhost:5173')
+  url.searchParams.set(parameter, token)
+  const subject = purpose === 'verify-email' ? 'Verify your FamilyPulse email' : 'Reset your FamilyPulse password'
+  const instruction = purpose === 'verify-email' ? 'verify your email address' : 'choose a new password'
+  const text = `Use this link to ${instruction}: ${url.toString()}\n\nIf you did not request this, you can ignore this message.`
+  if (!mailer) {
+    console.info(`Local ${purpose} link for ${email}: ${url.toString()}`)
+    return
+  }
+  await mailer.sendMail({ from: process.env.SMTP_FROM, to: email, subject, text })
 }
 
 function fail(response, status, message) {
@@ -253,16 +286,25 @@ app.post('/api/auth/signup', authLimiter, async (request, response, next) => {
     if (!name || name.length > 80 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || typeof password !== 'string' || password.length < 12 || password.length > 128) {
       return fail(response, 400, 'Enter a valid name, email, and password between 12 and 128 characters.')
     }
-    const accountId = await transaction(async (client) => {
+    const registration = await transaction(async (client) => {
       const { id } = await insertAccount(client, { name, email, password })
       const circleId = makeId('circle')
       await client.query('INSERT INTO circles (id, name, owner_id) VALUES ($1, $2, $3)', [circleId, `${name.split(' ')[0]}'s Family Circle`, id])
       await client.query('INSERT INTO circle_members (circle_id, account_id) VALUES ($1, $2)', [circleId, id])
       await client.query('UPDATE accounts SET active_circle_id = $1 WHERE id = $2', [circleId, id])
+      if (requireVerifiedEmail) {
+        const token = await issueEmailToken(client, id, 'verify-email', 24 * 60 * 60 * 1000)
+        return { accountId: id, token }
+      }
+      await client.query('UPDATE accounts SET email_verified = TRUE WHERE id = $1', [id])
       await createSession(client, id, response)
-      return id
+      return { accountId: id, token: null }
     })
-    response.json(await getState(accountId))
+    if (registration.token) {
+      await sendAccountLink(email, 'verify-email', registration.token)
+      return response.status(202).json({ requiresVerification: true })
+    }
+    response.json(await getState(registration.accountId))
   } catch (error) { next(error) }
 })
 
@@ -273,8 +315,78 @@ app.post('/api/auth/login', authLimiter, async (request, response, next) => {
     if (!email || typeof password !== 'string' || password.length > 128) return fail(response, 400, 'Enter a valid email and password.')
     const { rows: [account] } = await pool.query('SELECT * FROM accounts WHERE email = $1', [email])
     if (!account || !await matchesPassword(password, account)) return fail(response, 401, 'No matching account was found. Check your email and password.')
+    if (requireVerifiedEmail && !account.email_verified) return fail(response, 403, 'Verify your email before signing in. You can request another verification link.')
     await transaction((client) => createSession(client, account.id, response))
     response.json(await getState(account.id))
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/verify-email', authLimiter, async (request, response, next) => {
+  try {
+    const token = request.body.token
+    if (typeof token !== 'string' || token.length > 128) return fail(response, 400, 'That verification link is invalid or expired.')
+    const accountId = await transaction(async (client) => {
+      const { rows: [emailToken] } = await client.query(
+        `SELECT account_id FROM email_tokens WHERE token_hash = $1 AND purpose = 'verify-email'
+         AND consumed_at IS NULL AND expires_at > now() FOR UPDATE`,
+        [sha256(token)],
+      )
+      if (!emailToken) throw Object.assign(new Error('That verification link is invalid or expired.'), { status: 400 })
+      await client.query('UPDATE email_tokens SET consumed_at = now() WHERE token_hash = $1', [sha256(token)])
+      await client.query('UPDATE accounts SET email_verified = TRUE WHERE id = $1', [emailToken.account_id])
+      await createSession(client, emailToken.account_id, response)
+      return emailToken.account_id
+    })
+    response.json(await getState(accountId))
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/resend-verification', authLimiter, async (request, response, next) => {
+  try {
+    const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : ''
+    if (email && email.length <= 254) {
+      const { rows: [account] } = await pool.query('SELECT id FROM accounts WHERE email = $1 AND email_verified = FALSE', [email])
+      if (account) {
+        const token = await transaction((client) => issueEmailToken(client, account.id, 'verify-email', 24 * 60 * 60 * 1000))
+        await sendAccountLink(email, 'verify-email', token)
+      }
+    }
+    response.json({ ok: true, message: 'If the account needs verification, a link has been sent.' })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/forgot-password', authLimiter, async (request, response, next) => {
+  try {
+    const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : ''
+    if (email && email.length <= 254) {
+      const { rows: [account] } = await pool.query('SELECT id FROM accounts WHERE email = $1 AND email_verified = TRUE', [email])
+      if (account) {
+        const token = await transaction((client) => issueEmailToken(client, account.id, 'reset-password', 30 * 60 * 1000))
+        await sendAccountLink(email, 'reset-password', token)
+      }
+    }
+    response.json({ ok: true, message: 'If the account exists, a password reset link has been sent.' })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/reset-password', authLimiter, async (request, response, next) => {
+  try {
+    const { token, password } = request.body
+    if (typeof token !== 'string' || token.length > 128 || typeof password !== 'string' || password.length < 12 || password.length > 128) return fail(response, 400, 'Use a valid reset link and a password between 12 and 128 characters.')
+    await transaction(async (client) => {
+      const { rows: [emailToken] } = await client.query(
+        `SELECT account_id FROM email_tokens WHERE token_hash = $1 AND purpose = 'reset-password'
+         AND consumed_at IS NULL AND expires_at > now() FOR UPDATE`,
+        [sha256(token)],
+      )
+      if (!emailToken) throw Object.assign(new Error('That password reset link is invalid or expired.'), { status: 400 })
+      const salt = randomBytes(16).toString('hex')
+      const passwordHash = await hashPassword(password, salt)
+      await client.query('UPDATE accounts SET password_salt = $1, password_hash = $2, password_iterations = $3 WHERE id = $4', [salt, passwordHash, passwordIterations, emailToken.account_id])
+      await client.query('UPDATE email_tokens SET consumed_at = now() WHERE token_hash = $1', [sha256(token)])
+      await client.query('DELETE FROM sessions WHERE account_id = $1', [emailToken.account_id])
+    })
+    response.json({ ok: true })
   } catch (error) { next(error) }
 })
 
