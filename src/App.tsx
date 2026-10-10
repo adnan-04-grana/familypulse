@@ -243,6 +243,16 @@ function App() {
     }
   }
 
+  function updateStore(mutator: (current: LocalStore) => LocalStore) {
+    const updated = mutator(store)
+    const changedCircle = updated.circles.find((item) => store.circles.find((currentCircle) => currentCircle.id === item.id)?.escalationMinutes !== item.escalationMinutes)
+    if (changedCircle) void performAction('update-escalation', { circleId: changedCircle.id, minutes: changedCircle.escalationMinutes })
+    const currentContacts = store.accounts.find((item) => item.id === accountId)?.contacts ?? []
+    const updatedContacts = updated.accounts.find((item) => item.id === accountId)?.contacts ?? []
+    const removedContact = currentContacts.find((contact) => !updatedContacts.some((item) => item.id === contact.id))
+    if (removedContact) void performAction('remove-contact', { contactId: removedContact.id })
+  }
+
   useEffect(() => {
     let cancelled = false
     void apiRequest<ApiState>('/api/state').then((remote) => {
@@ -564,6 +574,7 @@ function App() {
 
   const rescueProfile = readMedicalRescuePayload()
   if (rescueProfile) return <MedicalRescuePage profile={rescueProfile} />
+  if (isBootstrapping) return <main className="auth-shell"><div className="auth-brand"><span className="brand-mark"><HeartPulse size={19}/></span><span>family<span className="brand-pulse">pulse</span></span></div><p>Connecting to your FamilyPulse account…</p></main>
   if (!account) return <AuthScreen mode={authMode} setMode={(mode) => { setAuthMode(mode); setAuthError('') }} error={authError} onSubmit={handleAuth} />
 
   return <main className="app-shell">
