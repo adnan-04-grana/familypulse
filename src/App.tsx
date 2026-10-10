@@ -13,9 +13,8 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import medicalDocumentStyles from './medical-document.css?inline'
 import {
-  blankPermissions, blankProfile, emptyStore, hashPassword, makeId, makeInviteCode,
-  makeInvitePasscode, makeMedicalCode, makePasswordSalt, hashInviteCredentials, PASSWORD_HASH_ITERATIONS, readStore, saveStore,
-  type Account, type AppNotification, type CircleInvite, type EmergencyContact,
+  emptyStore, makeInviteCode, makeInvitePasscode, hashInviteCredentials,
+  type Account, type AppNotification,
   type FamilyCircle, type LocalStore, type MemberPermissions,
   type SafetyEvent,
 } from './store'
@@ -27,15 +26,21 @@ type GeoPoint = { latitude: number; longitude: number; accuracy: number; timesta
 type BatteryManagerLike = EventTarget & { level: number }
 type InviteDraft = { code: string; passcode: string; expiresAt: number } | null
 type ProfileField = { key: keyof Account['profile']; label: string; type?: string; options?: string[]; access?: 'basic' | 'medical' | 'emergency' }
+type ApiState = { accountId: string; store: LocalStore; locations: GeoPoint[]; presence: { accountId: string; lastSeenAt: number }[] }
 
 function timestampNow() { return Date.now() }
 const INVITE_LIFETIME_MS = 15 * 60 * 1000
 
-function isInviteActive(invite: CircleInvite, now = timestampNow()) {
-  return typeof invite.createdAt === 'number'
-    && invite.createdAt <= now
-    && invite.expiresAt > now
-    && invite.expiresAt <= invite.createdAt + INVITE_LIFETIME_MS
+async function apiRequest<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: body === undefined ? 'GET' : 'POST',
+    credentials: 'same-origin',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const result = await response.json().catch(() => ({})) as T & { error?: string }
+  if (!response.ok) throw new Error(result.error ?? 'The FamilyPulse service could not complete this request.')
+  return result
 }
 const SESSION_ACTIVITY_KEY = 'familypulse-session-last-active'
 const SESSION_IDLE_LIMIT = 15 * 60 * 1000
