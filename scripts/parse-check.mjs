@@ -29,3 +29,11 @@ for (const position of braces) {
   const location = source.getLineAndCharacterOfPosition(position)
   console.log(`Unclosed brace at ${location.line + 1}:${location.character + 1}`)
 }
+function visit(node) {
+  if (ts.isBlock(node) && node.end === source.end) {
+    const location = source.getLineAndCharacterOfPosition(node.getStart(source))
+    console.log(`Block reaches EOF from ${location.line + 1}:${location.character + 1}`)
+  }
+  ts.forEachChild(node, visit)
+}
+visit(source)
