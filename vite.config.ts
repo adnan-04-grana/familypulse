@@ -24,6 +24,9 @@ const securityHeaders = {
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS === 'true' ? '/familypulse/' : '/',
   plugins: [react()],
-  server: { headers: securityHeaders },
+  server: {
+    headers: securityHeaders,
+    proxy: { '/api': 'http://127.0.0.1:3001' },
+  },
   preview: { headers: securityHeaders },
 })

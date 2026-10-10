@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "node server/index.mjs",
+    "dev:web": "vite",
+    "setup:db": "node scripts/setup-database.mjs",
     "auto-push": "node scripts/auto-push.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
