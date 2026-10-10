@@ -70,17 +70,19 @@ try {
   END $setup$`)
   const { rows: [database] } = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [databaseName])
   if (!database) await admin.query(`CREATE DATABASE ${databaseName} OWNER ${appRole}`)
-  else await admin.query(`ALTER DATABASE ${databaseName} OWNER TO ${appRole}`)
+  else {
+    await admin.query(`ALTER DATABASE ${databaseName} OWNER TO ${appRole}`)
+    const { rows: tables } = await admin.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+    for (const { tablename } of tables) {
+      const safeName = tablename.replaceAll('"', '""')
+      await admin.query(`ALTER TABLE public."${safeName}" OWNER TO ${appRole}`)
+    }
+  }
   await admin.end()
   admin = null
 
   application = new Client({ host, port, database: databaseName, user: appRole, password: appPassword })
   await application.connect()
-  const { rows: tables } = await application.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-  for (const { tablename } of tables) {
-    const safeName = tablename.replaceAll('"', '""')
-    await application.query(`ALTER TABLE public."${safeName}" OWNER TO ${appRole}`)
-  }
   await application.query(await readFile(schemaFile, 'utf8'))
   await application.end()
   application = null
