@@ -11,7 +11,6 @@ const app = express()
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sessionCookie = 'familypulse_session'
-const sessionIdleMs = 15 * 60 * 1000
 const inviteLifetimeMs = 15 * 60 * 1000
 const passwordIterations = 600_000
 const medicalAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -154,8 +153,17 @@ async function getState(accountId) {
       [memberIds, accountId],
     )
     : { rows: [] }
+  const { rows: presenceRows } = memberIds.length
+    ? await pool.query(
+      `SELECT account_id AS "accountId", EXTRACT(EPOCH FROM max(last_seen_at)) * 1000 AS "lastSeenAt"
+       FROM sessions WHERE account_id = ANY($1::text[]) AND last_seen_at > now() - interval '90 seconds'
+       GROUP BY account_id`,
+      [memberIds],
+    )
+    : { rows: [] }
 
   return {
+    accountId,
     store: {
       accounts: accountRows.map((item) => {
         const permissions = item.permissions
@@ -182,6 +190,7 @@ async function getState(accountId) {
       notifications,
     },
     locations: visibleLocations.rows,
+    presence: presenceRows.map((item) => ({ accountId: item.accountId, lastSeenAt: Number(item.lastSeenAt) })),
   }
 }
 
@@ -193,6 +202,13 @@ app.use(async (request, response, next) => {
     if (origin && new URL(origin).host !== request.get('host')) return fail(response, 403, 'Cross-origin request denied.')
   }
   next()
+})
+
+app.get('/api/health', async (_request, response, next) => {
+  try {
+    await pool.query('SELECT 1')
+    response.json({ ok: true })
+  } catch (error) { next(error) }
 })
 
 app.post('/api/auth/signup', async (request, response, next) => {
@@ -392,13 +408,6 @@ app.put('/api/location', async (request, response, next) => {
        accuracy = EXCLUDED.accuracy, updated_at = EXCLUDED.updated_at, expires_at = EXCLUDED.expires_at`,
       [request.accountId, latitude, longitude, accuracy, timestamp],
     )
-    response.json({ ok: true })
-  } catch (error) { next(error) }
-})
-
-app.get('/api/health', async (_request, response, next) => {
-  try {
-    await pool.query('SELECT 1')
     response.json({ ok: true })
   } catch (error) { next(error) }
 })
