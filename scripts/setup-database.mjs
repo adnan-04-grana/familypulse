@@ -1,7 +1,5 @@
 import { randomBytes } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
-import { createInterface } from 'node:readline/promises'
-import { stdin, stdout } from 'node:process'
 import { Client } from 'pg'
 
 const host = process.env.PGHOST ?? 'localhost'
@@ -11,37 +9,6 @@ const appRole = 'familypulse_app'
 const envFile = new URL('../.env', import.meta.url)
 const schemaFile = new URL('../server/schema.sql', import.meta.url)
 
-function hiddenInput(prompt) {
-  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') throw new Error('Run npm run setup:db in a terminal to enter the administrator password securely.')
-  stdout.write(prompt)
-  stdin.setRawMode(true)
-  stdin.resume()
-  return new Promise((resolve, reject) => {
-    let value = ''
-    const onData = (data) => {
-      for (const character of data.toString()) {
-        if (character === '\u0003') {
-          stdin.off('data', onData)
-          stdin.setRawMode(false)
-          reject(new Error('Setup cancelled.'))
-          return
-        }
-        if (character === '\r' || character === '\n') {
-          stdin.off('data', onData)
-          stdin.setRawMode(false)
-          stdout.write('\n')
-          resolve(value)
-          return
-        }
-        if (character === '\u007f' || character === '\b') value = value.slice(0, -1)
-        else value += character
-      }
-    }
-    stdin.on('data', onData)
-  })
-}
-
-const readline = createInterface({ input: stdin, output: stdout })
 let admin
 let application
 
@@ -54,11 +21,10 @@ try {
     if (error.code !== 'ENOENT') throw error
   }
 
-  const adminUser = (await readline.question('PostgreSQL administrator role [postgres]: ')).trim() || 'postgres'
-  readline.close()
-  const adminPassword = await hiddenInput(`Password for ${adminUser} (hidden): `)
+  const adminPassword = process.env.PGPASSWORD
+  if (!adminPassword) throw new Error('Run setup:db from PowerShell with a masked PGPASSWORD prompt.')
   const appPassword = randomBytes(32).toString('hex')
-  admin = new Client({ host, port, database: 'postgres', user: adminUser, password: adminPassword })
+  admin = new Client({ host, port, database: 'postgres', user: 'postgres', password: adminPassword })
   await admin.connect()
 
   await admin.query(`DO $setup$ BEGIN
@@ -94,7 +60,6 @@ try {
   console.error(error.message)
   process.exitCode = 1
 } finally {
-  readline.close()
   await admin?.end().catch(() => {})
   await application?.end().catch(() => {})
 }
