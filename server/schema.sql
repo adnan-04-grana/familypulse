@@ -93,8 +93,19 @@ CREATE TABLE IF NOT EXISTS email_tokens (
   consumed_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS circle_members_account_idx ON circle_members(account_id);
 CREATE INDEX IF NOT EXISTS safety_events_circle_created_idx ON safety_events(circle_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS notifications_account_created_idx ON notifications(account_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS sessions_account_idx ON sessions(account_id);
 CREATE INDEX IF NOT EXISTS email_tokens_account_purpose_idx ON email_tokens(account_id, purpose, expires_at);
+CREATE INDEX IF NOT EXISTS push_subscriptions_account_idx ON push_subscriptions(account_id);
