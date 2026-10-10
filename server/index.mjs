@@ -231,6 +231,7 @@ async function getState(accountId) {
       invites: [],
       events,
       notifications,
+    },
     locations: visibleLocations.rows,
     presence: presenceRows.map((item) => ({ accountId: item.accountId, lastSeenAt: Number(item.lastSeenAt) })),
   }
