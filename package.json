@@ -8,6 +8,7 @@
     "dev:api": "node --watch server/index.mjs",
     "dev:web": "vite",
     "setup:db": "node scripts/setup-database.mjs",
+    "start": "node server/index.mjs",
     "auto-push": "node scripts/auto-push.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

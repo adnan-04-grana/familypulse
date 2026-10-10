@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import express from 'express'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import pg from 'pg'
 import 'dotenv/config'
 
@@ -16,7 +18,6 @@ const passwordIterations = 600_000
 const medicalAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const profileKeys = ['dateOfBirth', 'bloodType', 'allergies', 'conditions', 'medications', 'doctor', 'insurance', 'notes', 'emergencyNumber']
 const permissionKeys = ['basic', 'medical', 'emergency', 'location']
-const authRequests = new Map()
 
 function makeId(prefix) {
   return `${prefix}_${randomBytes(12).toString('hex')}`
@@ -72,15 +73,13 @@ function fail(response, status, message) {
   response.status(status).json({ error: message })
 }
 
-function limitAuthRequests(request, response, next) {
-  const now = Date.now()
-  const key = request.socket.remoteAddress ?? 'unknown'
-  const recent = (authRequests.get(key) ?? []).filter((timestamp) => now - timestamp < 15 * 60 * 1000)
-  if (recent.length >= 12) return fail(response, 429, 'Too many account attempts. Try again in a few minutes.')
-  recent.push(now)
-  authRequests.set(key, recent)
-  next()
-}
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 12,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many account attempts. Try again in a few minutes.' },
+})
 
 function validText(value, maximum = 4000) {
   return typeof value === 'string' && value.length <= maximum
@@ -206,6 +205,29 @@ async function getState(accountId) {
 }
 
 app.disable('x-powered-by')
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'self'", "'sha256-Z2/iFzh9VMlVkEOar1f/oSHWwQk3ve1qk/C2WdsC4Xk='"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'", 'https://nominatim.openstreetmap.org'],
+    },
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  strictTransportSecurity: process.env.NODE_ENV === 'production' ? undefined : false,
+}))
+app.use((_request, response, next) => {
+  response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)')
+  next()
+})
 app.use(express.json({ limit: '32kb' }))
 app.use(async (request, response, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
@@ -223,7 +245,7 @@ app.get('/api/health', async (_request, response, next) => {
   } catch (error) { next(error) }
 })
 
-app.post('/api/auth/signup', limitAuthRequests, async (request, response, next) => {
+app.post('/api/auth/signup', authLimiter, async (request, response, next) => {
   try {
     const name = typeof request.body.name === 'string' ? request.body.name.trim() : ''
     const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : ''
@@ -244,7 +266,7 @@ app.post('/api/auth/signup', limitAuthRequests, async (request, response, next) 
   } catch (error) { next(error) }
 })
 
-app.post('/api/auth/login', limitAuthRequests, async (request, response, next) => {
+app.post('/api/auth/login', authLimiter, async (request, response, next) => {
   try {
     const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : ''
     const password = request.body.password
@@ -256,7 +278,7 @@ app.post('/api/auth/login', limitAuthRequests, async (request, response, next) =
   } catch (error) { next(error) }
 })
 
-app.post('/api/auth/join', limitAuthRequests, async (request, response, next) => {
+app.post('/api/auth/join', authLimiter, async (request, response, next) => {
   try {
     const { name, email, password, code, passcode } = request.body
     const cleanName = typeof name === 'string' ? name.trim() : ''
@@ -425,6 +447,13 @@ app.put('/api/location', async (request, response, next) => {
   } catch (error) { next(error) }
 })
 
+app.use(express.static(resolve(root, 'dist'), { index: false, maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 }))
+app.get(/^(?!\/api(?:\/|$)).*/, (_request, response, next) => {
+  response.sendFile(resolve(root, 'dist/index.html'), (error) => {
+    if (error) next(error)
+  })
+})
+
 app.use((error, _request, response, _next) => {
   if (error.code === '23505') return fail(response, 409, 'An account with this email already exists.')
   if (error.code === '23503') return fail(response, 400, 'That family circle could not be found.')
@@ -439,5 +468,6 @@ const locationCleanup = setInterval(() => {
   void pool.query('DELETE FROM locations WHERE expires_at <= now()').catch((error) => console.error('Location cleanup failed.', error))
 }, 60_000)
 locationCleanup.unref()
-const port = Number(process.env.API_PORT ?? 3001)
-app.listen(port, '127.0.0.1', () => console.log(`FamilyPulse API listening on http://127.0.0.1:${port}`))
+const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
+const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'
+app.listen(port, host, () => console.log(`FamilyPulse API listening on http://${host}:${port}`))
