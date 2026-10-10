@@ -12,6 +12,7 @@ let ownerCookie
 let memberCookie
 let ownerId
 let memberId
+let serverOutput = ''
 
 async function availablePort() {
   const server = createServer()
@@ -68,7 +69,7 @@ test('API persists accounts and enforces circle permissions and invite use', asy
     env: { ...process.env, API_PORT: String(port), NODE_ENV: 'test', REQUIRE_EMAIL_VERIFICATION: 'true' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  let serverOutput = ''
+  serverOutput = ''
   serverProcess.stdout.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk })
   serverProcess.stderr.setEncoding('utf8').on('data', (chunk) => { serverOutput += chunk })
   context.after(async () => {
