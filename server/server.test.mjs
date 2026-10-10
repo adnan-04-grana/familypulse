@@ -12,7 +12,6 @@ let apiBase
 let ownerCookie
 let memberCookie
 let ownerId
-let memberId
 let serverOutput = ''
 
 async function availablePort() {
@@ -153,7 +152,6 @@ test('API persists accounts and enforces circle permissions and invite use', asy
   })
   assert.equal(memberVerification.response.status, 200)
   memberCookie = memberVerification.setCookie
-  memberId = memberVerification.data.accountId
   const hiddenOwner = memberVerification.data.store.accounts.find((account) => account.id === ownerId)
   assert.equal(hiddenOwner.profile.allergies, '')
   assert.equal(hiddenOwner.email, '')
