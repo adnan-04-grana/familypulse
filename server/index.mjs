@@ -115,7 +115,7 @@ async function insertAccount(client, { name, email, password }, activeCircleId =
 }
 
 function filterProfile(profile, permissions, own) {
-  if (own) return profile
+  if (own) return Object.fromEntries(profileKeys.map((key) => [key, profile[key] ?? '']))
   const allowed = new Set()
   if (permissions.basic) ['dateOfBirth', 'bloodType', 'doctor'].forEach((key) => allowed.add(key))
   if (permissions.medical) ['allergies', 'conditions', 'medications', 'insurance', 'notes'].forEach((key) => allowed.add(key))
