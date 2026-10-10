@@ -601,7 +601,9 @@ app.post('/api/actions', async (request, response, next) => {
       clearSessionCookie(response)
       return response.json({ ok: true })
     }
-    if (pushMessage) await sendPushNotifications(pushMessage.accountIds, pushMessage.payload)
+    if (pushMessage) {
+      await sendPushNotifications(pushMessage.accountIds, pushMessage.payload).catch((error) => console.error('Push notification lookup failed.', error))
+    }
     response.json(await getState(accountId))
   } catch (error) { next(error) }
 })
