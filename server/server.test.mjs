@@ -216,6 +216,57 @@ test('API persists accounts and enforces circle permissions and invite use', asy
   assert.equal(reusedResetToken.response.status, 400)
 })
 
+test('production server serves the SPA with security headers on the platform port', async (context) => {
+  const port = await availablePort()
+  const vapidKeys = webPush.generateVAPIDKeys()
+  const productionProcess = spawn(process.execPath, ['server/index.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: String(port),
+      APP_BASE_URL: 'https://familypulse.example.test',
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: '2525',
+      SMTP_SECURE: 'false',
+      SMTP_USER: 'test-user',
+      SMTP_PASS: 'test-password',
+      SMTP_FROM: 'FamilyPulse <noreply@example.test>',
+      VAPID_PUBLIC_KEY: vapidKeys.publicKey,
+      VAPID_PRIVATE_KEY: vapidKeys.privateKey,
+      VAPID_SUBJECT: 'mailto:test@example.test',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = ''
+  productionProcess.stdout.setEncoding('utf8').on('data', (chunk) => { output += chunk })
+  productionProcess.stderr.setEncoding('utf8').on('data', (chunk) => { output += chunk })
+  context.after(async () => {
+    productionProcess.kill()
+    if (productionProcess.exitCode === null) await once(productionProcess, 'exit')
+  })
+
+  const origin = `http://127.0.0.1:${port}`
+  let ready = false
+  const startupDeadline = Date.now() + 20_000
+  while (Date.now() < startupDeadline && !ready) {
+    if (productionProcess.exitCode !== null) throw new Error(`Production API process exited during startup: ${output}`)
+    try {
+      ready = (await fetch(`${origin}/api/health`)).ok
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
+  assert.equal(ready, true, `Production API failed to start: ${output}`)
+
+  const home = await fetch(origin)
+  assert.equal(home.status, 200)
+  assert.match(await home.text(), /FamilyPulse \| Connected family care/)
+  assert.ok(home.headers.get('content-security-policy'))
+  assert.ok(home.headers.get('permissions-policy'))
+  assert.ok(home.headers.get('strict-transport-security'))
+})
+
 after(async () => {
   if (serverProcess && serverProcess.exitCode === null) {
     serverProcess.kill()
