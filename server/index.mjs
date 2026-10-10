@@ -579,7 +579,7 @@ app.post('/api/actions', async (request, response, next) => {
         const detail = `${account.name} requested a check-in in ${circles.map((circle) => circle.name).join(', ')}. Contact them directly to confirm their safety.`
         for (const circle of circles) await client.query('INSERT INTO safety_events (id, circle_id, member_id, created_by, summary, status, created_at) VALUES ($1, $2, $3, $3, $4, $5, $6)', [eventId, circle.id, accountId, 'Manual safety check-in requested', 'open', createdAt])
         for (const recipient of recipients) await client.query('INSERT INTO notifications (id, account_id, title, detail, created_at) VALUES ($1, $2, $3, $4, $5)', [makeId('notice'), recipient.account_id, 'Family safety check-in requested', detail, createdAt])
-        pushMessage = { accountIds: recipients.map((recipient) => recipient.account_id), payload: { title: 'Family safety check-in requested', body: detail, url: '/' } }
+        pushMessage = { accountIds: recipients.map((recipient) => recipient.account_id), payload: { title: 'Family safety check-in requested', body: 'A family member requested a manual check-in. Open FamilyPulse to view.', url: '/' } }
       } else if (type === 'update-event') {
         if (!['responding', 'resolved', 'cancelled'].includes(payload.status)) throw Object.assign(new Error('Invalid check-in status.'), { status: 400 })
         const { rows: [event] } = await client.query('SELECT e.* FROM safety_events e JOIN circle_members cm ON cm.circle_id = e.circle_id AND cm.account_id = $2 WHERE e.id = $1 FOR UPDATE', [payload.eventId, accountId])
