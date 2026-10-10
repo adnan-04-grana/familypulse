@@ -20,7 +20,7 @@ const mailer = smtpConfigured ? nodemailer.createTransport({
   secure: process.env.SMTP_SECURE === 'true',
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 }) : null
-const requireVerifiedEmail = process.env.NODE_ENV === 'production' || smtpConfigured
+const requireVerifiedEmail = process.env.NODE_ENV === 'production' || process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || smtpConfigured
 const sessionCookie = 'familypulse_session'
 const inviteLifetimeMs = 15 * 60 * 1000
 const passwordIterations = 600_000
@@ -409,10 +409,19 @@ app.post('/api/auth/join', authLimiter, async (request, response, next) => {
       const { id } = await insertAccount(client, { name: cleanName, email: cleanEmail, password }, invite.circle_id)
       await client.query('INSERT INTO circle_members (circle_id, account_id) VALUES ($1, $2)', [invite.circle_id, id])
       await client.query('UPDATE invites SET consumed_at = now() WHERE id = $1', [invite.id])
+      if (requireVerifiedEmail) {
+        const token = await issueEmailToken(client, id, 'verify-email', 24 * 60 * 60 * 1000)
+        return { accountId: id, token }
+      }
+      await client.query('UPDATE accounts SET email_verified = TRUE WHERE id = $1', [id])
       await createSession(client, id, response)
-      return id
+      return { accountId: id, token: null }
     })
-    response.json(await getState(accountId))
+    if (accountId.token) {
+      await sendAccountLink(cleanEmail, 'verify-email', accountId.token)
+      return response.status(202).json({ requiresVerification: true })
+    }
+    response.json(await getState(accountId.accountId))
   } catch (error) { next(error) }
 })
 
