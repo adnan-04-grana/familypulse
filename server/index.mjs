@@ -310,7 +310,10 @@ app.post('/api/actions', async (request, response, next) => {
         if (![name, relationship, phone].every((value) => validText(value, 120)) || !name.trim() || !phone.trim()) throw Object.assign(new Error('Enter a valid emergency contact.'), { status: 400 })
         await client.query('UPDATE accounts SET contacts = contacts || $1::jsonb WHERE id = $2', [JSON.stringify([{ id: makeId('contact'), name: name.trim(), relationship: relationship.trim(), phone: phone.trim() }]), accountId])
       } else if (type === 'remove-contact') {
-        await client.query('UPDATE accounts SET contacts = COALESCE((SELECT jsonb_agg(item) FROM jsonb_array_elements(contacts) item WHERE item->>'id' <> $1), '[]'::jsonb) WHERE id = $2', [payload.contactId, accountId])
+        await client.query(
+          `UPDATE accounts SET contacts = COALESCE((SELECT jsonb_agg(item) FROM jsonb_array_elements(contacts) item WHERE item->>'id' <> $1), '[]'::jsonb) WHERE id = $2`,
+          [payload.contactId, accountId],
+        )
       } else if (type === 'set-location-sharing') {
         if (typeof payload.checked !== 'boolean') throw Object.assign(new Error('Invalid location setting.'), { status: 400 })
         await client.query('UPDATE accounts SET share_location = $1 WHERE id = $2', [payload.checked, accountId])
