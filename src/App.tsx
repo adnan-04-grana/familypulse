@@ -331,6 +331,7 @@ function App() {
       setLocationError('')
       const point = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, timestamp: position.timestamp }
       setGeoPoints((currentPoints) => ({ ...currentPoints, [activeAccountId]: point }))
+      void apiRequest('/api/location', point, 'PUT').catch(() => setLocationError('Location could not be shared with your family service.'))
       pendingStreetLookup.current = { accountId: activeAccountId, point }
       if (streetLookupTimeout.current === null) {
         const delay = Math.max(1000, 60_000 - (timestampNow() - lastStreetLookupAt.current))
@@ -353,7 +354,7 @@ function App() {
       if (error.code === error.PERMISSION_DENIED) {
         setGeoPoints((currentPoints) => { const next = { ...currentPoints }; delete next[activeAccountId]; return next })
         setGeoAddresses((currentAddresses) => { const next = { ...currentAddresses }; delete next[activeAccountId]; return next })
-        updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === activeAccountId ? { ...item, shareLocation: false } : item) }))
+        void performAction('set-location-sharing', { checked: false })
       }
     }
     const options: PositionOptions = { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
@@ -369,12 +370,9 @@ function App() {
     }
   }, [activeAccountId, isLocationSharing])
 
-  function updateStore(mutator: (current: LocalStore) => LocalStore) {
-    setStore((currentStore) => mutator(currentStore))
-  }
   function switchCircle(circleId: string) {
     if (!account || !joinedCircles.some((item) => item.id === circleId)) return
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, circleId } : item) }))
+    void performAction('switch-circle', { circleId })
     setCircleSwitcherOpen(false)
     setPage('dashboard')
   }
@@ -383,9 +381,11 @@ function App() {
     window.setTimeout(() => setToast(''), 3200)
   }
   function handleLogout() {
+    void apiRequest('/api/auth/logout', {}).catch(() => undefined)
     sessionStorage.removeItem('familypulse-session')
     sessionStorage.removeItem(SESSION_ACTIVITY_KEY)
     setAccountId(null)
+    setStore(emptyStore())
     setPage('dashboard')
     setSelectedMemberId(null)
     setGeoPoints({})
@@ -396,9 +396,11 @@ function App() {
     if (!accountId) return
     let timeoutId: number
     const lockSession = () => {
+      void apiRequest('/api/auth/logout', {}).catch(() => undefined)
       sessionStorage.removeItem('familypulse-session')
       sessionStorage.removeItem(SESSION_ACTIVITY_KEY)
       setAccountId(null)
+      setStore(emptyStore())
       setPage('dashboard')
       setSelectedMemberId(null)
       setGeoPoints({})
@@ -446,51 +448,21 @@ function App() {
       setAuthError(authMode === 'login' ? 'Enter a valid email and password.' : 'Use a valid email and a password between 12 and 128 characters.')
       return
     }
-    if (authMode === 'signup') {
-      const name = String(form.get('name') ?? '').trim()
-      if (!name || name.length > 80) { setAuthError('Enter a name of 1 to 80 characters.'); return }
-      if (store.accounts.some((item) => item.email === email)) { setAuthError('An account with this email already exists in this browser.'); return }
-      const id = makeId('person')
-      const circleId = makeId('circle')
-      const salt = makePasswordSalt()
-      const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId, medicalId: makeMedicalCode(store.accounts.map((item) => item.medicalId)), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
-      const newCircle: FamilyCircle = { id: circleId, name: `${name.split(' ')[0]}'s Family Circle`, ownerId: id, memberIds: [id], escalationMinutes: 5 }
-      updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: [...currentStore.circles, newCircle] }))
-      sessionStorage.setItem('familypulse-session', id)
-      sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(timestampNow()))
-      setAccountId(id)
-      return
-    }
+    const endpoint = authMode === 'signup' ? '/api/auth/signup' : authMode === 'join' ? '/api/auth/join' : '/api/auth/login'
+    const payload: Record<string, string> = { email, password }
+    if (authMode !== 'login') payload.name = String(form.get('name') ?? '').trim()
     if (authMode === 'join') {
-      const code = String(form.get('inviteCode') ?? '').trim().toUpperCase()
-      const passcode = String(form.get('invitePasscode') ?? '').trim()
-      const token = await hashInviteCredentials(code, passcode)
-      const invite = store.invites.find((item) => isInviteActive(item) && (item.token ? item.token === token : item.code === code && item.passcode === passcode))
-      if (!invite) { setAuthError('That invite code and passcode are invalid or expired.'); return }
-      const name = String(form.get('name') ?? '').trim()
-      if (!name || name.length > 80) { setAuthError('Enter a name of 1 to 80 characters.'); return }
-      if (store.accounts.some((item) => item.email === email)) { setAuthError('An account with this email already exists in this browser.'); return }
-      const id = makeId('person')
-      const salt = makePasswordSalt()
-      const passwordHash = await hashPassword(password, salt)
-      const newAccount: Account = { id, name, email, passwordSalt: salt, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS, circleId: invite.circleId, medicalId: makeMedicalCode(store.accounts.map((item) => item.medicalId)), profile: blankProfile(), profileSaved: false, permissions: blankPermissions(), contacts: [], shareLocation: false }
-      updateStore((currentStore) => ({ ...currentStore, accounts: [...currentStore.accounts, newAccount], circles: currentStore.circles.map((item) => item.id === invite.circleId ? { ...item, memberIds: [...item.memberIds, id] } : item), invites: currentStore.invites.filter((item) => item !== invite) }))
-      sessionStorage.setItem('familypulse-session', id)
+      payload.code = String(form.get('inviteCode') ?? '').trim().toUpperCase()
+      payload.passcode = String(form.get('invitePasscode') ?? '').trim()
+    }
+    try {
+      const remote = await apiRequest<ApiState>(endpoint, payload)
+      applyRemoteState(remote)
       sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(timestampNow()))
-      setAccountId(id)
-      return
+      setPage('dashboard')
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'The account request could not be completed.')
     }
-    const found = store.accounts.find((item) => item.email === email)
-    const passwordIterations = found?.passwordIterations ?? 120_000
-    if (!found || found.passwordHash !== await hashPassword(password, found.passwordSalt, passwordIterations)) { setAuthError('No matching account in this browser. Use the same browser and profile where the account was created.'); return }
-    if (passwordIterations < PASSWORD_HASH_ITERATIONS) {
-      const passwordHash = await hashPassword(password, found.passwordSalt)
-      updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === found.id ? { ...item, passwordHash, passwordIterations: PASSWORD_HASH_ITERATIONS } : item) }))
-    }
-    sessionStorage.setItem('familypulse-session', found.id)
-    sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(timestampNow()))
-    setAccountId(found.id)
   }
   async function createInvite() {
     if (!circle || !account) return
@@ -498,10 +470,11 @@ function App() {
     const passcode = makeInvitePasscode()
     const token = await hashInviteCredentials(code, passcode)
     const createdAt = timestampNow()
-    const invite: CircleInvite = { token, createdAt, circleId: circle.id, createdBy: account.id, expiresAt: createdAt + INVITE_LIFETIME_MS }
-    updateStore((currentStore) => ({ ...currentStore, invites: [...currentStore.invites, invite] }))
-    setInviteDraft({ code, passcode, expiresAt: invite.expiresAt })
-    setInviteModal('create')
+    const expiresAt = createdAt + INVITE_LIFETIME_MS
+    if (await performAction('create-invite', { tokenHash: token, createdAt, expiresAt, circleId: circle.id })) {
+      setInviteDraft({ code, passcode, expiresAt })
+      setInviteModal('create')
+    }
   }
   async function joinExistingCircle(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -510,102 +483,82 @@ function App() {
     const code = String(form.get('inviteCode') ?? '').trim().toUpperCase()
     const passcode = String(form.get('invitePasscode') ?? '').trim()
     const password = String(form.get('password') ?? '')
-    const passwordIterations = account.passwordIterations ?? 120_000
-    if (account.passwordHash !== await hashPassword(password, account.passwordSalt, passwordIterations)) {
-      notify('That password does not match your account.')
-      return
-    }
-    const token = await hashInviteCredentials(code, passcode)
-    const invite = store.invites.find((item) => isInviteActive(item) && (item.token ? item.token === token : item.code === code && item.passcode === passcode))
-    const targetCircle = invite ? store.circles.find((item) => item.id === invite.circleId) : null
-    if (!invite || !targetCircle) {
-      notify('That invite code and passcode are invalid or expired.')
-      return
-    }
-    if (targetCircle.memberIds.includes(account.id)) {
-      switchCircle(targetCircle.id)
-      notify(`You are already a member of ${targetCircle.name}.`)
-      return
-    }
-    const upgradedHash = passwordIterations < PASSWORD_HASH_ITERATIONS ? await hashPassword(password, account.passwordSalt) : account.passwordHash
-    updateStore((currentStore) => ({
-      ...currentStore,
-      accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, circleId: targetCircle.id, passwordHash: upgradedHash, passwordIterations: PASSWORD_HASH_ITERATIONS } : item),
-      circles: currentStore.circles.map((item) => item.id === targetCircle.id ? { ...item, memberIds: [...item.memberIds, account.id] } : item),
-      invites: currentStore.invites.filter((item) => item !== invite),
-    }))
+    if (!await performAction('join-circle', { code, passcode, password })) return
     setCircleSwitcherOpen(false)
     setSelectedMemberId(null)
     setPage('dashboard')
-    notify(`You joined ${targetCircle.name}.`)
+    notify('You joined the family circle.')
   }
   function handleRemoveMember(memberId: string) {
     if (!circle || !account || circle.ownerId !== account.id || memberId === account.id) return
     const person = store.accounts.find((item) => item.id === memberId)
-    const otherCircle = store.circles.find((item) => item.id !== circle.id && item.memberIds.includes(memberId))
-    updateStore((currentStore) => ({ ...currentStore, circles: currentStore.circles.map((item) => item.id === circle.id ? { ...item, memberIds: item.memberIds.filter((id) => id !== memberId) } : item), accounts: currentStore.accounts.map((item) => item.id === memberId ? { ...item, circleId: otherCircle?.id ?? makeId('detached') } : item) }))
+    void performAction('remove-member', { circleId: circle.id, memberId })
     setSelectedMemberId(null)
     notify(`${person?.name ?? 'Member'} has been removed from this circle.`)
   }
   function saveProfile(profile: Account['profile']) {
     if (!account) return
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, profile, profileSaved: true, medicalId: item.medicalId || makeMedicalCode(currentStore.accounts.map((storedAccount) => storedAccount.medicalId)) } : item) }))
+    void performAction('update-profile', { profile })
   }
   function updatePermission(field: keyof MemberPermissions, checked: boolean) {
     if (!account) return
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, permissions: { ...item.permissions, [field]: checked } } : item) }))
+    void performAction('update-permission', { field, checked })
   }
   function saveContact(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!account) return
     const form = new FormData(event.currentTarget)
-    const contact: EmergencyContact = { id: makeId('contact'), name: String(form.get('name') ?? '').trim(), relationship: String(form.get('relationship') ?? '').trim(), phone: String(form.get('phone') ?? '').trim() }
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, contacts: [...item.contacts, contact] } : item) }))
-    setContactModal(false)
-    notify('Emergency contact saved locally.')
+    const contact = { name: String(form.get('name') ?? '').trim(), relationship: String(form.get('relationship') ?? '').trim(), phone: String(form.get('phone') ?? '').trim() }
+    void performAction('add-contact', { contact }).then((saved) => {
+      if (!saved) return
+      setContactModal(false)
+      notify('Emergency contact saved to your account.')
+    })
   }
   function toggleLocationSharing(checked: boolean) {
     if (!account) return
     if (checked && !navigator.geolocation) { setLocationError('This browser does not provide location services.'); return }
     setLocationError('')
-    updateStore((currentStore) => ({ ...currentStore, accounts: currentStore.accounts.map((item) => item.id === account.id ? { ...item, shareLocation: checked } : item) }))
-    if (!checked) { setGeoPoints((currentPoints) => { const next = { ...currentPoints }; delete next[account.id]; return next }); setGeoAddresses((currentAddresses) => { const next = { ...currentAddresses }; delete next[account.id]; return next }); notify('Location access turned off. The locally held location was removed.'); return }
-    if (checked) notify('Requesting current location. OpenStreetMap receives coordinates to look up street names; they are not saved in this browser.')
+    void performAction('set-location-sharing', { checked }).then((saved) => {
+      if (!saved) return
+      if (!checked) {
+        setGeoPoints((currentPoints) => { const next = { ...currentPoints }; delete next[account.id]; return next })
+        setGeoAddresses((currentAddresses) => { const next = { ...currentAddresses }; delete next[account.id]; return next })
+        notify('Location sharing is off and your saved location was removed.')
+      } else notify('Location sharing is on. Your coordinates remain for up to one hour and are visible only with location permission.')
+    })
   }
   function startManualSafetyEvent() {
     if (!account || !circle) return
-    const joinedCircles = store.circles.filter((item) => item.memberIds.includes(account.id))
-    const targetCircles = joinedCircles.length ? joinedCircles : [circle]
-    const eventId = makeId('event')
-    const createdAt = timestampNow()
-    const events: SafetyEvent[] = targetCircles.map((item) => ({ id: eventId, circleId: item.id, memberId: account.id, createdBy: account.id, summary: 'Manual safety check-in requested', status: 'open', createdAt }))
-    const recipients = new Set(targetCircles.flatMap((item) => item.memberIds))
-    const detail = `${account.name} requested a check-in in ${targetCircles.map((item) => item.name).join(', ')}. Contact them directly to confirm their safety.`
-    const notifications: AppNotification[] = Array.from(recipients, (targetAccountId) => ({ id: makeId('notice'), accountId: targetAccountId, title: 'Family safety check-in requested', detail, createdAt, read: false }))
-    updateStore((currentStore) => ({ ...currentStore, events: [...events, ...currentStore.events], notifications: [...notifications, ...currentStore.notifications] }))
-    setPage('emergency-history')
-    notify(`Local alert recorded for ${recipients.size} circle member${recipients.size === 1 ? '' : 's'} across ${targetCircles.length} circle${targetCircles.length === 1 ? '' : 's'}. Other devices are not connected.`)
+    void performAction('start-event').then((saved) => {
+      if (!saved) return
+      setPage('emergency-history')
+      notify('Manual check-in saved and shared with your family circle.')
+    })
   }
   function updateEvent(eventId: string, status: SafetyEvent['status']) {
     if (!account) return
-    updateStore((currentStore) => ({ ...currentStore, events: currentStore.events.map((item) => item.id === eventId ? { ...item, status, responseBy: status === 'responding' ? account.id : item.responseBy } : item) }))
-    notify(status === 'responding' ? 'You are marked as responding.' : `Check-in marked ${status}.`)
+    void performAction('update-event', { eventId, status }).then((saved) => {
+      if (saved) notify(status === 'responding' ? 'You are marked as responding.' : `Check-in marked ${status}.`)
+    })
   }
   function markNotificationsRead() {
     if (!account) return
-    updateStore((currentStore) => ({ ...currentStore, notifications: currentStore.notifications.map((item) => item.accountId === account.id ? { ...item, read: true } : item) }))
+    void performAction('mark-notifications-read')
   }
   function clearLocalData() {
-    if (!window.confirm('Delete all FamilyPulse data stored for this browser, including accounts, profiles, invites, and history? This cannot be undone.')) return
-    sessionStorage.removeItem('familypulse-session')
-    sessionStorage.removeItem(SESSION_ACTIVITY_KEY)
-    localStorage.removeItem('familypulse-local-v1')
-    setStore(emptyStore())
-    setAccountId(null)
-    setGeoPoints({})
-    setGeoAddresses({})
-    setPage('dashboard')
-    notify('Local data deleted.')
+    if (!window.confirm('Permanently delete your FamilyPulse account and personal data? This cannot be undone.')) return
+    void performAction('delete-account').then((deleted) => {
+      if (!deleted) return
+      sessionStorage.removeItem('familypulse-session')
+      sessionStorage.removeItem(SESSION_ACTIVITY_KEY)
+      setStore(emptyStore())
+      setAccountId(null)
+      setGeoPoints({})
+      setGeoAddresses({})
+      setPage('dashboard')
+      notify('Your account and personal data were deleted.')
+    })
   }
 
   const rescueProfile = readMedicalRescuePayload()
