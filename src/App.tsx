@@ -485,6 +485,38 @@ function App() {
     const form = new FormData(event.currentTarget)
     const email = String(form.get('email') ?? '').trim().toLowerCase()
     const password = String(form.get('password') ?? '')
+    if (authMode === 'forgot' || authMode === 'resend-verification') {
+      if (!email || email.length > 254) {
+        setAuthError('Enter the email address for your account.')
+        return
+      }
+      const endpoint = authMode === 'forgot' ? '/api/auth/forgot-password' : '/api/auth/resend-verification'
+      try {
+        const result = await apiRequest<{ message: string }>(endpoint, { email })
+        setAuthError(result.message)
+      } catch (error) {
+        setAuthError(error instanceof Error ? error.message : 'The request could not be completed.')
+      }
+      return
+    }
+    if (authMode === 'reset') {
+      const token = new URLSearchParams(window.location.search).get('reset-password')
+      if (!token || password.length < 12 || password.length > 128) {
+        setAuthError('Use a valid reset link and a password between 12 and 128 characters.')
+        return
+      }
+      try {
+        await apiRequest<{ ok: true }>('/api/auth/reset-password', { token, password })
+        const url = new URL(window.location.href)
+        url.searchParams.delete('reset-password')
+        window.history.replaceState({}, '', url)
+        setAuthMode('login')
+        setAuthError('Password reset. Sign in with your new password.')
+      } catch (error) {
+        setAuthError(error instanceof Error ? error.message : 'That reset link is invalid or expired.')
+      }
+      return
+    }
     const minimumPasswordLength = authMode === 'login' ? 6 : 12
     if (!email || email.length > 254 || password.length < minimumPasswordLength || password.length > 128) {
       setAuthError(authMode === 'login' ? 'Enter a valid email and password.' : 'Use a valid email and a password between 12 and 128 characters.')
@@ -498,7 +530,12 @@ function App() {
       payload.passcode = String(form.get('invitePasscode') ?? '').trim()
     }
     try {
-      const remote = await apiRequest<ApiState>(endpoint, payload)
+      const remote = await apiRequest<ApiState | { requiresVerification: true }>(endpoint, payload)
+      if ('requiresVerification' in remote) {
+        setAuthMode('login')
+        setAuthError('Account created. Check your email for a verification link before signing in.')
+        return
+      }
       applyRemoteState(remote)
       sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(timestampNow()))
       setPage('dashboard')
