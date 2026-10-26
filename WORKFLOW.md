@@ -46,13 +46,14 @@ flowchart TD
     ALERT --> RESPONSE[Member marks responding, resolved or cancelled]
     RESPONSE --> LOAD
 
-    ACTION -->|Share location| CONSENT[Member enables sharing and grants browser permission]
+    ACTION -->|Share location| LOCATION_CHOICE{Turn sharing on?}
+    LOCATION_CHOICE -->|Yes| CONSENT[Member enables sharing and grants browser permission]
     CONSENT --> GEO[Browser reads device location]
     GEO --> LOCATION[API stores coordinates for up to one hour]
     LOCATION --> MAP[Show only to circle members with location permission]
     GEO --> REVERSE[Look up street name with OpenStreetMap Nominatim]
     REVERSE --> MAP
-    CONSENT -->|Sharing turned off| DELETE_LOCATION[Delete saved coordinates]
+    LOCATION_CHOICE -->|No| DELETE_LOCATION[Turn sharing off and delete saved coordinates]
     DELETE_LOCATION --> LOAD
 
     ACTION -->|Sign out| LOGOUT[Revoke session and clear session cookie]
