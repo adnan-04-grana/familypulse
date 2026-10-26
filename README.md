@@ -39,6 +39,7 @@ When this folder opens in VS Code, approve the `Auto-push saved changes` task on
 
 ## Current capabilities
 
+- See the [FamilyPulse workflow diagram](./WORKFLOW.md) for the account, family-circle, check-in, and location flows.
 - Accounts, family circles, profiles, permissions, emergency contacts, invites, check-ins, notifications, sessions, and consented locations are stored in PostgreSQL.
 - Passwords are hashed on the server using PBKDF2-SHA-256 with a per-account salt and 600,000 iterations. Sessions use random HttpOnly, SameSite cookies and lock after 15 minutes without activity.
 - Production signups require email verification; password-reset links expire after 30 minutes and can only be used once. Configure SMTP to deliver these emails. Local development without SMTP logs one-time links in the API terminal.
